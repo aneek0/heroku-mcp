@@ -1,0 +1,7 @@
+heroku_mcp:
+  api_id: 12345       # замени на свой из https://my.telegram.org
+  api_hash: abcdef1234567890abcdef1234567890  # замени на свой
+  session_path: sessions/heroku_mcp
+  server_port: 6767
+  her_chat_id: me
+  modules_dir: modules

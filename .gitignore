@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.venv/
+.env
+config.yaml
+*.pid
+sessions/
+*.session
+*.session-journal
+*.session.lock
+.python-version
+modules/
