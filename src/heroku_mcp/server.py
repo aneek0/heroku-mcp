@@ -106,9 +106,14 @@ async def evaluate(expr: str) -> str:
 
 @mcp.tool()
 async def restart_userbot(verify: bool = True) -> str:
-    """Force-restart the Heroku userbot via `.restart -f`. Optionally verify it comes back."""
-    response = await _execute(".restart -f", wait=8.0)
-    result = response if response != "(no response)" else "(no response — userbot is restarting)"
+    """Force-restart the Heroku userbot via `.restart -f` and report the final restart status."""
+    from .telegram import send_command_final
+    # Restart edits can be spread over the whole boot: use boot_wait both as
+    # the settle window between edits and to scale the overall deadline.
+    boot_wait = settings.restart_boot_wait
+    final = await send_command_final(".restart -f", wait=boot_wait * 2 + 30, quiet=float(boot_wait))
+    if not final:
+        return "(no response — userbot did not report restart)"
     if verify:
         boot_wait = settings.restart_boot_wait
         log.info("Waiting %ds for userbot to boot before verification", boot_wait)
@@ -116,10 +121,10 @@ async def restart_userbot(verify: bool = True) -> str:
         for attempt in range(3):
             check = await _execute(".help", wait=6.0)
             if check != "(no response)":
-                return f"{result}\n✅ userbot is back (attempt {attempt + 1})"
+                return f"{final}\n✅ userbot is back (attempt {attempt + 1})"
             await asyncio.sleep(10)
-        return f"{result}\n⚠️ no confirmation after restart — check manually"
-    return result
+        return f"{final}\n⚠️ no confirmation after restart — check manually"
+    return final
 
 
 @mcp.tool()

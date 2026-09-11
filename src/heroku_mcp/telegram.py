@@ -199,6 +199,89 @@ async def send_command(command: str, wait: float = 10.0) -> str:
     return "(no response)"
 
 
+async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.0) -> str:
+    """Send a command and return the *final* text once successive edits settle.
+
+    Some commands (e.g. ``.restart -f``) edit the same message several times:
+    "restarting...", then "started without modules", then "fully restarted".
+    ``send_command`` returns on the first edit; this one keeps tracking the
+    message until no new edit arrives for ``quiet`` seconds (or ``wait``
+    elapses) and returns the last text. Returns "" on timeout.
+
+    Args:
+        command: The command string to send.
+        wait: Overall deadline in seconds.
+        quiet: Consider the message settled after this many seconds without a new edit.
+    """
+    client = await get_client()
+    entity = await _resolve_entity()
+    topic = settings.her_topic_id or None
+
+    me = await client.get_me() if entity is None else None
+    target = entity or me
+    kwargs = {}
+    if topic:
+        kwargs["reply_to"] = topic
+
+    target_id = getattr(target, "id", None)
+    loop = asyncio.get_running_loop()
+
+    edit_fut: asyncio.Future = loop.create_future()
+    sent_id = None
+    last_text = ""
+    last_edit_at: float | None = None
+    seen_texts: set[str] = set()
+
+    def _accept(text: str) -> None:
+        nonlocal last_text
+        # Monotonic: every distinct text is a new stage; a poll returning an
+        # older stage text must not regress the state machine.
+        if text and text != command and text != last_text and text not in seen_texts and not edit_fut.done():
+            seen_texts.add(text)
+            last_text = text
+            edit_fut.set_result(text)
+
+    @client.on(events.MessageEdited)
+    async def _on_edit(event):
+        if sent_id is not None and event.message.id != sent_id:
+            return
+        if target_id is not None and event.chat_id != target_id:
+            return
+        _accept(event.message.text or "")
+
+    poll_entity = entity or me
+    try:
+        sent = await client.send_message(target, command, **kwargs)
+        sent_id = sent.id
+        log.info("Sent command: %s (msg_id=%d, tracking edits)", command, sent_id)
+
+        deadline = loop.time() + wait
+        poll_interval = 0.25
+        while loop.time() < deadline:
+            try:
+                text = await asyncio.wait_for(asyncio.shield(edit_fut), timeout=poll_interval)
+                log.info("Edit received: %d chars", len(text))
+                edit_fut = loop.create_future()
+                last_edit_at = loop.time()
+                continue
+            except asyncio.TimeoutError:
+                pass
+            try:
+                fresh = await client.get_messages(poll_entity, ids=sent_id)
+                if fresh and fresh.text:
+                    _accept(fresh.text)
+            except Exception:
+                pass
+
+            # No new edit within `quiet` seconds — the message has settled.
+            if last_text and last_edit_at is not None and loop.time() - last_edit_at >= quiet:
+                break
+    finally:
+        client.remove_event_handler(_on_edit)
+
+    return last_text
+
+
 async def ensure_watcher() -> None:
     """Pre-fetch target chat to force channel sync before first command."""
     client = await get_client()
