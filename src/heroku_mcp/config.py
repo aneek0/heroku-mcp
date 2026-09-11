@@ -23,6 +23,7 @@ class HerokuMcpSettings(BaseSettings):
     her_chat_id: Union[str, int] = Field(default="me")
     modules_dir: str = Field(default="modules")
     her_topic_id: int = Field(default=0)
+    restart_boot_wait: int = Field(default=30)
 
     @property
     def modules_path(self) -> Path:

@@ -105,6 +105,24 @@ async def evaluate(expr: str) -> str:
 
 
 @mcp.tool()
+async def restart_userbot(verify: bool = True) -> str:
+    """Force-restart the Heroku userbot via `.restart -f`. Optionally verify it comes back."""
+    response = await _execute(".restart -f", wait=8.0)
+    result = response if response != "(no response)" else "(no response — userbot is restarting)"
+    if verify:
+        boot_wait = settings.restart_boot_wait
+        log.info("Waiting %ds for userbot to boot before verification", boot_wait)
+        await asyncio.sleep(boot_wait)
+        for attempt in range(3):
+            check = await _execute(".help", wait=6.0)
+            if check != "(no response)":
+                return f"{result}\n✅ userbot is back (attempt {attempt + 1})"
+            await asyncio.sleep(10)
+        return f"{result}\n⚠️ no confirmation after restart — check manually"
+    return result
+
+
+@mcp.tool()
 async def send_command_tool(cmd: str, wait: float = 5.0) -> str:
     """Send a raw command to the Heroku userbot."""
     # Security: block destructive commands

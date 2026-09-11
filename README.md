@@ -32,6 +32,7 @@ Config via `config.yaml` or environment variables with `HEROKU_MCP_` prefix:
 | `modules_dir` | `HEROKU_MCP_MODULES_DIR` | `modules` | Directory for module files |
 | `her_chat_id` | `HEROKU_MCP_HER_CHAT_ID` | `me` | Target chat — `"me"` for Saved Messages, or a group/channel ID for a dedicated log group |
 | `her_topic_id` | `HEROKU_MCP_HER_TOPIC_ID` | `0` | Forum topic ID within `her_chat_id` (0 = disabled) |
+| `restart_boot_wait` | `HEROKU_MCP_RESTART_BOOT_WAIT` | `30` | Seconds to wait for the userbot to boot before verification after `.restart -f` |
 
 ## MCP Tools
 
@@ -39,6 +40,7 @@ Config via `config.yaml` or environment variables with `HEROKU_MCP_` prefix:
 - `unload_module(name)` — unload a module
 - `list_modules()` — list loaded modules
 - `evaluate(expr)` — evaluate Python expression
+- `restart_userbot(verify)` — force-restart the userbot (`.restart -f`), optionally verify it comes back
 - `send_command_tool(cmd)` — send a raw command
 - `get_history(limit)` — get recent messages from the target chat (plain text)
 - `get_history_json(limit)` — get recent messages from the target chat (JSON)
