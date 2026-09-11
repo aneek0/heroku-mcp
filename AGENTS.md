@@ -14,10 +14,10 @@ MCP server for managing a Heroku Telegram userbot via MCP protocol.
 
 ## Entry points
 
-- `heroku_mcp/server.py` — MCP tool definitions (`main()`)
-- `heroku_mcp/config.py` — settings singleton (`from .config import settings`)
-- `heroku_mcp/telegram.py` — Telegram client, command sending
-- `heroku_mcp/module_store.py` — HTTP server for `.py` distribution
+^- `src/heroku_mcp/server.py` — MCP tool definitions (`main()`)
+^- `src/heroku_mcp/config.py` — settings singleton (`from .config import settings`)
+^- `src/heroku_mcp/telegram.py` — Telegram client, command sending
+^- `src/heroku_mcp/module_store.py` — HTTP server for `.py` distribution
 
 ## Architecture
 

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Union
 
 import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class HerokuMcpSettings(BaseSettings):
@@ -19,7 +20,7 @@ class HerokuMcpSettings(BaseSettings):
     api_hash: str = Field(default="")
     session_path: str = Field(default="sessions/heroku_mcp")
     server_port: int = Field(default=6767)
-    her_chat_id: str = Field(default="me")
+    her_chat_id: Union[str, int] = Field(default="me")
     modules_dir: str = Field(default="modules")
     her_topic_id: int = Field(default=0)
 

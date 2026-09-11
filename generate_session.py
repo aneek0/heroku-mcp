@@ -47,7 +47,7 @@ def _load_creds(args):
     if api_id and api_hash:
         return int(api_id), api_hash
     if yaml:
-        for path in (Path("config.yaml"), Path(__file__).resolve().parent / "config.yaml"):
+        for path in (Path(__file__).resolve().parent / "config.yaml", Path.cwd() / "config.yaml"):
             if path.is_file():
                 data = yaml.safe_load(path.read_text()) or {}
                 cfg = data.get("heroku_mcp", {})

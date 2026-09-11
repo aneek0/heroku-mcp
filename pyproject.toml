@@ -19,4 +19,4 @@ dependencies = [
 heroku-mcp = "heroku_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["heroku_mcp"]
+packages = ["src/heroku_mcp"]
