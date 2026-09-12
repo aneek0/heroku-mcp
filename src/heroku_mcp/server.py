@@ -19,6 +19,7 @@ from .telegram import (
     ensure_watcher,
     get_client,
     send_command,
+    set_target_chat,
     shutdown,
     _call_with_recovery,
     _resolve_entity,
@@ -157,42 +158,76 @@ async def send_command_tool(cmd: str, wait: float = 5.0) -> str:
     return response
 
 
+def _topic_filter(msg) -> bool:
+    """True if msg belongs to the configured topic (or no topic set)."""
+    topic = settings.her_topic_id
+    if not topic:
+        return True
+    reply = getattr(msg, "reply_to", None)
+    if reply is None:
+        return False
+    # Messages inside a topic reply to the topic's root message id.
+    if getattr(reply, "forum_topic", False):
+        return True
+    return getattr(reply, "reply_to_msg_id", None) == topic or \
+        getattr(reply, "reply_to_top_id", None) == topic
+
+
 @mcp.tool()
 async def get_history(limit: int = 20) -> str:
-    """Get recent messages from Saved Messages for diagnostics."""
+    """Get recent messages from the configured chat/topic for diagnostics."""
     client = await get_client()
     entity = await _resolve_entity()
     target = entity or await client.get_me()
     messages = await _call_with_recovery(
-        lambda: client.get_messages(target, limit=limit)
+        lambda: client.get_messages(target, limit=max(limit * 3, limit))
     )
     lines = []
     for msg in reversed(messages):
-        if msg.text:
-            date_str = msg.date.isoformat() if msg.date else "?"
-            lines.append(f"--- #{msg.id} ({date_str}) ---")
-            lines.append(msg.text[:500])
+        if not msg or not msg.text or not _topic_filter(msg):
+            continue
+        date_str = msg.date.isoformat() if msg.date else "?"
+        lines.append(f"--- #{msg.id} ({date_str}) ---")
+        lines.append(msg.text[:500])
+        if len([l for l in lines if l.startswith("--- #")]) >= limit:
+            break
     return "\n".join(lines)
 
 
 @mcp.tool()
 async def get_history_json(limit: int = 20) -> str:
-    """Get recent messages from Saved Messages as JSON."""
+    """Get recent messages from the configured chat/topic as JSON."""
     client = await get_client()
     entity = await _resolve_entity()
     target = entity or await client.get_me()
     messages = await _call_with_recovery(
-        lambda: client.get_messages(target, limit=limit)
+        lambda: client.get_messages(target, limit=max(limit * 3, limit))
     )
     result = []
     for msg in reversed(messages):
-        if msg.text:
-            result.append({
-                "id": msg.id,
-                "text": msg.text[:500],
-                "date": msg.date.isoformat() if msg.date else None,
-            })
+        if not msg or not msg.text or not _topic_filter(msg):
+            continue
+        result.append({
+            "id": msg.id,
+            "text": msg.text[:500],
+            "date": msg.date.isoformat() if msg.date else None,
+        })
+        if len(result) >= limit:
+            break
     return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+async def switch_chat(chat: str, topic: int = 0) -> str:
+    """Switch the chat (and optional forum topic) all commands are sent to.
+
+    Accepts:
+    - "me" (Saved Messages), chat id, @username
+    - topic link: "https://t.me/c/3537976236/7" or "https://t.me/<username>/<topic>" —
+      the topic is extracted from the link automatically
+    - explicit topic: pass chat id/username + topic number
+    """
+    return await set_target_chat(chat, topic)
 
 
 def main() -> None:

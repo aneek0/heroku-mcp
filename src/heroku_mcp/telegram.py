@@ -401,6 +401,36 @@ def invalidate_entity():
     _resolved_entity = None
 
 
+async def set_target_chat(chat: Union[str, int], topic: int = 0) -> str:
+    """Switch the chat (and optional forum topic) commands are sent to.
+
+    Args:
+        chat: chat id, @username, "me" (Saved Messages), or a t.me link
+            (t.me/c/<id>/<topic> / t.me/<username>/<topic>).
+        topic: forum topic id; 0 = whole chat. A topic inside a passed link
+            overrides this argument.
+
+    Returns a human-readable confirmation (no secrets).
+    """
+    from .config import parse_chat_link
+
+    chat, link_topic = parse_chat_link(str(chat))
+    if link_topic:
+        topic = link_topic  # topic inside the link wins over the argument
+    settings.her_chat_id = chat
+    settings.her_topic_id = int(topic)
+    invalidate_entity()
+    # Verify resolvability right away so the caller gets an actionable error.
+    entity = await _resolve_entity()
+    if entity is None:
+        where = "Saved Messages"
+    else:
+        where = getattr(entity, "title", None) or str(chat)
+    topic_str = f", topic {settings.her_topic_id}" if settings.her_topic_id else ""
+    log.info("Target chat switched: %s%s", where, topic_str)
+    return f"Commands will now be sent to: {where}{topic_str}"
+
+
 async def send_command(command: str, wait: float = 10.0) -> str:
     """Send a command to the configured chat and wait for Heroku's response.
 

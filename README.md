@@ -94,5 +94,16 @@ aborts startup instead of silently falling back to a direct connection.
 - `evaluate(expr)` — evaluate Python expression
 - `restart_userbot(verify)` — force-restart the userbot (`.restart -f`), optionally verify it comes back
 - `send_command_tool(cmd)` — send a raw command
-- `get_history(limit)` — get recent messages from the target chat (plain text)
-- `get_history_json(limit)` — get recent messages from the target chat (JSON)
+- `get_history(limit)` — get recent messages from the target chat/topic (plain text)
+- `get_history_json(limit)` — get recent messages from the target chat/topic (JSON)
+- `switch_chat(chat, topic)` — switch the target chat/topic at runtime; accepts
+  `me`, ids, `@username`, or a topic link like `https://t.me/c/3537976236/7`
+
+### Forum topics
+
+`her_chat_id` accepts a topic link — the chat and topic are extracted
+automatically: `https://t.me/c/3537976236/7` → chat `3537976236`, topic `7`.
+Commands are sent inside the topic (via `reply_to`), and `get_history` only
+shows messages from that topic. Alternatively set `her_topic_id` separately
+(explicit value wins over a link). `switch_chat` changes the target at
+runtime without a restart.

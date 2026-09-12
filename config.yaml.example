@@ -3,7 +3,14 @@ heroku_mcp:
   api_hash: abcdef1234567890abcdef1234567890  # замени на свой
   session_path: sessions/heroku_mcp
   server_port: 6767
+  # Куда отправляются команды. Варианты:
+  #   "me"                     — Saved Messages
+  #   "@username" или id        — чат/канал
+  #   ссылка на топик          — "https://t.me/c/3537976236/7"
+  #     (чат + топик извлекаются из ссылки автоматически)
+  # Топик можно задать и отдельно: her_chat_id: 3537976236 + her_topic_id: 7
   her_chat_id: me
+  # her_topic_id: 7   # только для форум-чатов; 0/отсутствие = весь чат
   modules_dir: modules
   restart_boot_wait: 30
   # Прокси для подключения к Telegram (необязательно).
