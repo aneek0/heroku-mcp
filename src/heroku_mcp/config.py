@@ -24,6 +24,7 @@ class HerokuMcpSettings(BaseSettings):
     modules_dir: str = Field(default="modules")
     her_topic_id: int = Field(default=0)
     restart_boot_wait: int = Field(default=30)
+    proxy: str = Field(default="")
 
     @property
     def modules_path(self) -> Path:

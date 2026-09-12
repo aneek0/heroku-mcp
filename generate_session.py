@@ -24,6 +24,12 @@ except ImportError:
     print("telethon не установлен. pip install telethon")
     sys.exit(1)
 
+try:
+    from heroku_mcp.proxy import parse_proxy, proxy_description
+except ImportError:
+    parse_proxy = None
+    proxy_description = None
+
 SESSION_DIR = Path(__file__).resolve().parent / "sessions"
 SESSION_NAME = "heroku_mcp"
 
@@ -58,6 +64,31 @@ def _load_creds(args):
     sys.exit(1)
 
 
+def _load_proxy():
+    """Read proxy from config.yaml / HEROKU_MCP_PROXY env (env wins)."""
+    spec = os.environ.get("HEROKU_MCP_PROXY", "")
+    if not spec and yaml:
+        for path in (Path(__file__).resolve().parent / "config.yaml", Path.cwd() / "config.yaml"):
+            if path.is_file():
+                data = yaml.safe_load(path.read_text()) or {}
+                spec = (data.get("heroku_mcp") or {}).get("proxy") or ""
+                if spec:
+                    break
+    spec = (spec or "").strip()
+    return spec
+
+
+def _proxy_kwargs():
+    """Build TelegramClient proxy kwargs; empty dict when no proxy set."""
+    spec = _load_proxy()
+    if not spec:
+        return {}
+    if parse_proxy is None:
+        print("⚠️  proxy задан, но модуль heroku_mcp.proxy недоступен — подключаюсь напрямую")
+        return {}
+    return parse_proxy(spec)
+
+
 async def main():
     args = parse_args()
     api_id, api_hash = _load_creds(args)
@@ -66,9 +97,13 @@ async def main():
 
     print(f"API_ID: {api_id}")
     print(f"Session: {session_path}.session")
+
+    proxy_kwargs = _proxy_kwargs()
+    if proxy_kwargs:
+        print(f"Proxy: {proxy_description(_load_proxy())}")
     print()
 
-    client = TelegramClient(str(session_path), api_id, api_hash)
+    client = TelegramClient(str(session_path), api_id, api_hash, **proxy_kwargs)
     await client.connect()
 
     if await client.is_user_authorized():

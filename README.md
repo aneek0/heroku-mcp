@@ -33,6 +33,25 @@ Config via `config.yaml` or environment variables with `HEROKU_MCP_` prefix:
 | `her_chat_id` | `HEROKU_MCP_HER_CHAT_ID` | `me` | Target chat — `"me"` for Saved Messages, or a group/channel ID for a dedicated log group |
 | `her_topic_id` | `HEROKU_MCP_HER_TOPIC_ID` | `0` | Forum topic ID within `her_chat_id` (0 = disabled) |
 | `restart_boot_wait` | `HEROKU_MCP_RESTART_BOOT_WAIT` | `30` | Seconds to wait for the userbot to boot before verification after `.restart -f` |
+| `proxy` | `HEROKU_MCP_PROXY` | — | Proxy for Telegram connection. Empty/absent = direct connection |
+
+### Proxy
+
+`proxy` accepts:
+
+- MTProto proxy links: `tg://proxy?server=...&port=...&secret=...` (or `https://t.me/proxy?...`), including `dd`/`ee` padded secrets
+- SOCKS5/4: `socks5://[user:pass@]host:port`, `socks4://host:port`
+- HTTP: `http://host:port`
+- SOCKS links: `tg://socks?server=...&port=...&user=...&pass=...` (or `t.me/socks?...`)
+
+```yaml
+heroku_mcp:
+  proxy: "tg://proxy?server=203.0.113.1&port=1443&secret=dd00112233445566778899aabbccddee1"
+```
+
+The env var `HEROKU_MCP_PROXY` overrides the YAML value. An invalid `proxy` value
+aborts startup instead of silently falling back to a direct connection.
+`generate_session.py` uses the same proxy setting.
 
 ## MCP Tools
 

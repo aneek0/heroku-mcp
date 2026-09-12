@@ -12,6 +12,7 @@ from typing import Optional, Union
 from telethon import TelegramClient, events
 
 from .config import settings
+from .proxy import parse_proxy, proxy_description
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +69,10 @@ def _build_client() -> TelegramClient:
     session = Path(settings.session_path)
     if not session.suffix:
         session = session.with_suffix(".session")
-    return TelegramClient(str(session), settings.api_id, settings.api_hash)
+    kwargs = parse_proxy(settings.proxy) if settings.proxy.strip() else {}
+    if kwargs:
+        log.info("Using proxy: %s", proxy_description(settings.proxy))
+    return TelegramClient(str(session), settings.api_id, settings.api_hash, **kwargs)
 
 
 async def get_client() -> TelegramClient:

@@ -6,3 +6,13 @@ heroku_mcp:
   her_chat_id: me
   modules_dir: modules
   restart_boot_wait: 30
+  # Прокси для подключения к Telegram (необязательно).
+  # Поддерживаются:
+  #   MTProto:  "tg://proxy?server=203.0.113.1&port=1443&secret=dd00112233445566778899aabbccddee1"
+  #             (то же самое в виде https://t.me/proxy?...)
+  #   SOCKS5:   "socks5://127.0.0.1:1080" или "socks5://user:pass@host:port"
+  #   SOCKS4:   "socks4://host:port"
+  #   HTTP:     "http://host:port"
+  #   Ссылка:   "tg://socks?server=...&port=...&user=...&pass=..." (t.me/socks)
+  # Пусто или отсутствие ключа = прямое подключение.
+  # proxy: "tg://proxy?server=203.0.113.1&port=1443&secret=dd00112233445566778899aabbccddee1"
