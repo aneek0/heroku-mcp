@@ -6,19 +6,82 @@ import asyncio
 import fcntl
 import logging
 import os
+import re
 from pathlib import Path
-from typing import Optional, Union
+from typing import Awaitable, Callable, Optional, TypeVar, Union
 
 from telethon import TelegramClient, events
+from telethon.errors import RPCError
 
 from .config import settings
-from .proxy import parse_proxy, proxy_description
+from .proxy import parse_proxy, parse_proxy_list, proxy_description
 
 log = logging.getLogger(__name__)
+
+# Errors that mean the proxy cluster went stale/broken mid-session: the
+# request itself is valid, but the current MTProto connection must be
+# re-established (a full reconnect picks a live proxy cluster). Telethon 1.44
+# deserializes MTPROTO_CLUSTER_INVALID as a generic RPCError (no dedicated
+# class in rpcerrorlist), so match by message string in addition to codes.
+_TRANSIENT_MSG_RE = re.compile(
+    r"MTPROTO_CLUSTER_INVALID|CLUSTER_INVALID|RECONNECT"
+)
 
 _client: Optional[TelegramClient] = None
 _resolved_entity = None
 _session_lock_fd: Optional[int] = None
+
+# Single-flight: concurrent first calls (lifespan warm-up + a tool call)
+# must not start two pool cycles at once — the second would burn the whole
+# tool timeout or fail on the flock session lock.
+_connect_lock = asyncio.Lock()
+
+T = TypeVar("T")
+
+# ---------------------------- proxy pool ----------------------------
+
+_proxy_pool: list[str] = []          # candidate specs, order preserved
+_pool_index: int = 0                 # next candidate to try (round-robin)
+_current_proxy: Optional[str] = None  # spec of the connected client
+_pool_loaded: bool = False           # list URL fetched at least once
+
+
+def _load_proxy_pool() -> None:
+    """Populate _proxy_pool from settings once (URL fetch, best-effort)."""
+    global _proxy_pool, _pool_loaded, _pool_index
+    if _pool_loaded:
+        return
+    _pool_loaded = True
+    pool: list[str] = []
+    url = settings.proxy_list_url.strip()
+    if url:
+        try:
+            import urllib.request
+            req = urllib.request.Request(url, headers={"User-Agent": "heroku-mcp/1.0"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                text = r.read().decode("utf-8", "replace")
+            fetched = parse_proxy_list(text)
+            log.info("Proxy list fetched from URL: %d candidates", len(fetched))
+            pool.extend(fetched)
+        except Exception as e:
+            log.warning(
+                "Could not fetch proxy list from %s: %s — falling back to 'proxy' setting",
+                url, e,
+            )
+    if settings.proxy.strip():
+        # The primary 'proxy' setting stays in the pool as a candidate too,
+        # tried first (index 0 preserves current behavior when it works).
+        if settings.proxy.strip() not in pool:
+            pool.insert(0, settings.proxy.strip())
+    _proxy_pool = pool
+    _pool_index = 0
+    if pool:
+        log.info(
+            "Proxy pool initialized: %d candidate(s), first: %s",
+            len(pool), proxy_description(pool[0]),
+        )
+    else:
+        log.info("Proxy pool empty — direct connection will be used")
 
 
 def _acquire_session_lock():
@@ -65,14 +128,69 @@ def _kill_stale_session():
                 log.warning("Could not remove %s: %s", p, e)
 
 
-def _build_client() -> TelegramClient:
+def _build_client(proxy_spec: Optional[str] = None) -> TelegramClient:
+    """Build a client; pool-aware when proxy_spec is None.
+
+    No-arg call keeps old behavior (uses settings.proxy); passing a spec
+    (pool candidate) builds a client pinned to that proxy.
+    """
+    if proxy_spec is None:
+        proxy_spec = settings.proxy if settings.proxy.strip() else None
     session = Path(settings.session_path)
     if not session.suffix:
         session = session.with_suffix(".session")
-    kwargs = parse_proxy(settings.proxy) if settings.proxy.strip() else {}
+    kwargs = parse_proxy(proxy_spec) if proxy_spec else {}
     if kwargs:
-        log.info("Using proxy: %s", proxy_description(settings.proxy))
-    return TelegramClient(str(session), settings.api_id, settings.api_hash, **kwargs)
+        log.info("Using proxy: %s", proxy_description(proxy_spec))
+    client = TelegramClient(str(session), settings.api_id, settings.api_hash, **kwargs)
+    global _current_proxy
+    _current_proxy = proxy_spec
+    return client
+
+
+async def _connect_pool() -> TelegramClient:
+    """Build a client trying pool candidates in order until one connects.
+
+    No pool (or all candidates failed) → falls back to the old single-proxy
+    path: build via settings.proxy and try 3 times (preserves the
+    MTPROTO_CLUSTER_INVALID healing via plain reconnect).
+    """
+    _load_proxy_pool()
+    last_err: Exception | None = None
+    global _pool_index, _pool_loaded, _current_proxy
+    n = len(_proxy_pool)
+    if n:
+        for offset in range(n):
+            idx = (_pool_index + offset) % n
+            spec = _proxy_pool[idx]
+            client = _build_client(spec)
+            try:
+                await asyncio.wait_for(
+                    client.connect(), timeout=settings.proxy_check_timeout
+                )
+                _pool_index = (idx + 1) % n
+                log.info(
+                    "Connected via pool proxy %d/%d: %s",
+                    idx + 1, n, proxy_description(spec),
+                )
+                return client
+            except Exception as e:
+                last_err = e
+                log.warning(
+                    "Pool proxy %d/%d failed (%s): %s",
+                    idx + 1, n, proxy_description(spec), e,
+                )
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+        # All pool candidates failed — maybe the list is stale; refetch next
+        # time _reset_client() runs.
+        _pool_loaded = False
+    # Legacy single-proxy path (also direct connection when proxy unset)
+    client = _build_client()
+    await _connect_with_retries(client)
+    return client
 
 
 async def _connect_with_retries(client: TelegramClient) -> None:
@@ -101,61 +219,69 @@ async def _connect_with_retries(client: TelegramClient) -> None:
 
 async def get_client() -> TelegramClient:
     global _client
-    if _client is None:
-        # Acquire exclusive lock to prevent concurrent session access
-        lock = _acquire_session_lock()
-        if lock is None:
-            # Cannot get lock — another process is using the session
-            raise RuntimeError("Cannot acquire session lock — another process holds it. Try again later.")
-        _client = _build_client()
+    async with _connect_lock:
+        if _client is None:
+            return await _connect_locked()
+        return _client
+
+
+async def _connect_locked() -> TelegramClient:
+    """Connect under _connect_lock (caller must hold it)."""
+    global _client
+    if _client is not None:
+        return _client
+    # Acquire exclusive lock to prevent concurrent session access
+    lock = _acquire_session_lock()
+    if lock is None:
+        # Cannot get lock — another process is using the session
+        raise RuntimeError("Cannot acquire session lock — another process holds it. Try again later.")
+    try:
+        _client = await _connect_pool()
         try:
+            if not await _client.is_user_authorized():
+                await _client.disconnect()
+                _client = None
+                _release_session_lock()
+                raise RuntimeError(
+                    "Telegram session is not authorized. Run "
+                    "'python generate_session.py --phone +<number>' to log in"
+                    " (it honors the proxy setting), then retry this tool -"
+                    " no server restart is needed."
+                )
+        except Exception as e:
+            if "locked" not in str(e).lower():
+                raise
+            # SQLite session locked by a stale writer — clean up once, rebuild, retry
+            log.warning("Session locked, killing stale processes and retrying: %s", e)
             try:
-                await _connect_with_retries(_client)
-                if not await _client.is_user_authorized():
-                    await _client.disconnect()
-                    _client = None
-                    _release_session_lock()
-                    raise RuntimeError(
-                        "Telegram session is not authorized. Run "
-                        "'python generate_session.py --phone +<number>' to log in"
-                        " (it honors the proxy setting), then retry this tool -"
-                        " no server restart is needed."
-                    )
-            except Exception as e:
-                if "locked" not in str(e).lower():
-                    raise
-                # SQLite session locked by a stale writer — clean up once, rebuild, retry
-                log.warning("Session locked, killing stale processes and retrying: %s", e)
-                try:
-                    await _client.disconnect()
-                except Exception:
-                    pass
+                await _client.disconnect()
+            except Exception:
+                pass
+            _client = None
+            _kill_stale_session()
+            await asyncio.sleep(1)
+            _client = await _connect_pool()
+            if not await _client.is_user_authorized():
+                await _client.disconnect()
                 _client = None
-                _kill_stale_session()
-                await asyncio.sleep(1)
-                _client = _build_client()
-                await _connect_with_retries(_client)
-                if not await _client.is_user_authorized():
-                    await _client.disconnect()
-                    _client = None
-                    _release_session_lock()
-                    raise RuntimeError(
-                        "Telegram session is not authorized. Run "
-                        "'python generate_session.py --phone +<number>' to log in"
-                        " (it honors the proxy setting), then retry this tool -"
-                        " no server restart is needed."
-                    )
-        except Exception:
-            if _client is not None:
-                try:
-                    await _client.disconnect()
-                except Exception:
-                    pass
-                _client = None
-            _release_session_lock()
-            raise
-        log.info("Telethon client connected (api_id=%s, dc=%s)",
-                 settings.api_id, _client.session.dc_id)
+                _release_session_lock()
+                raise RuntimeError(
+                    "Telegram session is not authorized. Run "
+                    "'python generate_session.py --phone +<number>' to log in"
+                    " (it honors the proxy setting), then retry this tool -"
+                    " no server restart is needed."
+                )
+    except Exception:
+        if _client is not None:
+            try:
+                await _client.disconnect()
+            except Exception:
+                pass
+            _client = None
+        _release_session_lock()
+        raise
+    log.info("Telethon client connected (api_id=%s, dc=%s)",
+             settings.api_id, _client.session.dc_id)
     return _client
 
 
@@ -166,6 +292,72 @@ async def shutdown() -> None:
         _client = None
     _resolved_entity = None
     _release_session_lock()
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """True if the error means the MTProto connection went stale mid-session.
+
+    Two families:
+    * ConnectionError / TimeoutError / ConnectionError subclasses from Telethon
+      (transport dropped, proxy flaked).
+    * Telegram RPC errors that indicate the server routing our connection is
+      now invalid — e.g. the MTProto proxy cluster rotated and our DC binding
+      ("cluster") expired. Telethon 1.44 ships no dedicated class for
+      MTPROTO_CLUSTER_INVALID, so it arrives as a generic RPCError and we
+      match the message string.
+    """
+    if isinstance(exc, (ConnectionError, TimeoutError, asyncio.TimeoutError)):
+        return True
+    if isinstance(exc, RPCError):
+        return bool(_TRANSIENT_MSG_RE.search(str(exc)))
+    # Telethon wraps some transport failures in generic Exceptions
+    msg = str(exc)
+    return bool(_TRANSIENT_MSG_RE.search(msg))
+
+
+async def _reset_client() -> None:
+    """Full reconnect: drop the client and rebuild a fresh connection.
+
+    A reconnect is what heals a stale proxy cluster: the new handshake may
+    land on a different backend route. Keeps the session lock held (the lock
+    protects the session file, not a single connection) — Telethon reopens
+    the SQLite file on connect(). With a pool configured, the next candidate
+    (round-robin) is tried first; the failed proxy is retried last on the next
+    cycle. When the whole pool is stale, _connect_pool() refetches the list.
+    """
+    global _client, _resolved_entity
+    if _client is not None:
+        try:
+            await _client.disconnect()
+        except Exception as e:
+            log.warning("Error during disconnect before reconnect: %s", e)
+    _client = await _connect_pool()
+    # Entity access hashes can differ across DCs; force re-resolution.
+    _resolved_entity = None
+    log.info("Telethon client reconnected after transient failure")
+
+
+async def _call_with_recovery(coro_factory: Callable[[], Awaitable[T]],
+                              attempts: int = 3) -> T:
+    """Run a Telegram call, reconnecting once on transient errors.
+
+    coro_factory must re-create the coroutine on every attempt (a used
+    coroutine object cannot be awaited twice).
+    """
+    last_exc: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await coro_factory()
+        except Exception as e:
+            if not _is_transient(e) or attempt == attempts:
+                raise
+            last_exc = e
+            log.warning(
+                "Transient Telegram error (attempt %d/%d), reconnecting: %s",
+                attempt, attempts, e,
+            )
+            await _reset_client()
+    raise last_exc  # unreachable, keeps type-checkers happy
 
 
 async def _resolve_entity() -> Union[str, int, None]:
@@ -248,6 +440,7 @@ async def send_command(command: str, wait: float = 10.0) -> str:
             event_fut.set_result(text)
 
     poll_entity = entity or me
+    _poll_reconnected = False
     try:
         sent = await client.send_message(target, command, **kwargs)
         sent_id = sent.id
@@ -268,8 +461,19 @@ async def send_command(command: str, wait: float = 10.0) -> str:
                 if fresh and fresh.text and fresh.text != command:
                     log.info("Poll response: %d chars", len(fresh.text))
                     return fresh.text
-            except Exception:
-                pass
+            except Exception as poll_err:
+                if _is_transient(poll_err) and not _poll_reconnected:
+                    _poll_reconnected = True
+                    log.warning("Poll hit transient error, reconnecting: %s", poll_err)
+                    await _reset_client()
+                    # _reset_client() replaced the module-level client; refresh
+                    # the local reference and re-register the edit handler on
+                    # the new connection (the old one is dead).
+                    client.remove_event_handler(_on_edit)
+                    client = _client
+                    client.add_event_handler(_on_edit, events.MessageEdited)
+                # Non-transient or already reconnected: keep polling locally,
+                # the event handler may still deliver the response.
     finally:
         client.remove_event_handler(_on_edit)
 
@@ -327,6 +531,7 @@ async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.
         _accept(event.message.text or "")
 
     poll_entity = entity or me
+    _poll_reconnected = False
     try:
         sent = await client.send_message(target, command, **kwargs)
         sent_id = sent.id
@@ -347,8 +552,16 @@ async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.
                 fresh = await client.get_messages(poll_entity, ids=sent_id)
                 if fresh and fresh.text:
                     _accept(fresh.text)
-            except Exception:
-                pass
+            except Exception as poll_err:
+                if _is_transient(poll_err) and not _poll_reconnected:
+                    _poll_reconnected = True
+                    log.warning("Poll hit transient error, reconnecting: %s", poll_err)
+                    await _reset_client()
+                    client.remove_event_handler(_on_edit)
+                    client = _client
+                    client.add_event_handler(_on_edit, events.MessageEdited)
+                # Non-transient or already reconnected: keep polling, edits
+                # may still arrive via the event handler.
 
             # No new edit within `quiet` seconds — the message has settled.
             if last_text and last_edit_at is not None and loop.time() - last_edit_at >= quiet:

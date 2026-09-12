@@ -15,7 +15,14 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import settings
 from .module_store import start_server as start_http, stop_server as stop_http, get_bound_port
-from .telegram import ensure_watcher, get_client, send_command, shutdown
+from .telegram import (
+    ensure_watcher,
+    get_client,
+    send_command,
+    shutdown,
+    _call_with_recovery,
+    _resolve_entity,
+)
 
 log = logging.getLogger("heroku_mcp")
 
@@ -153,11 +160,12 @@ async def send_command_tool(cmd: str, wait: float = 5.0) -> str:
 @mcp.tool()
 async def get_history(limit: int = 20) -> str:
     """Get recent messages from Saved Messages for diagnostics."""
-    from .telegram import _resolve_entity
     client = await get_client()
     entity = await _resolve_entity()
     target = entity or await client.get_me()
-    messages = await client.get_messages(target, limit=limit)
+    messages = await _call_with_recovery(
+        lambda: client.get_messages(target, limit=limit)
+    )
     lines = []
     for msg in reversed(messages):
         if msg.text:
@@ -170,11 +178,12 @@ async def get_history(limit: int = 20) -> str:
 @mcp.tool()
 async def get_history_json(limit: int = 20) -> str:
     """Get recent messages from Saved Messages as JSON."""
-    from .telegram import _resolve_entity
     client = await get_client()
     entity = await _resolve_entity()
     target = entity or await client.get_me()
-    messages = await client.get_messages(target, limit=limit)
+    messages = await _call_with_recovery(
+        lambda: client.get_messages(target, limit=limit)
+    )
     result = []
     for msg in reversed(messages):
         if msg.text:

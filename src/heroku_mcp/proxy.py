@@ -162,6 +162,26 @@ def parse_proxy(spec: str) -> dict:
     return _parse_socks_uri(spec)
 
 
+def parse_proxy_list(text: str) -> list[str]:
+    """Extract parseable proxy links/URIs from a text list.
+
+    One proxy per line. Comments (#...) and blank lines are skipped. Only
+    specs that parse_proxy() accepts are kept; junk lines are ignored so a
+    dirty public list doesn't kill the pool.
+    """
+    result = []
+    for line in text.splitlines():
+        spec = line.strip()
+        if not spec or spec.startswith("#"):
+            continue
+        try:
+            parse_proxy(spec)
+        except ValueError:
+            continue
+        result.append(spec)
+    return result
+
+
 def proxy_description(spec: str) -> str:
     """Human-readable proxy summary for logs (never includes secret/password)."""
     kwargs = parse_proxy(spec)

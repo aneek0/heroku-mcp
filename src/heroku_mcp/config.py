@@ -25,6 +25,15 @@ class HerokuMcpSettings(BaseSettings):
     her_topic_id: int = Field(default=0)
     restart_boot_wait: int = Field(default=30)
     proxy: str = Field(default="")
+    proxy_list_url: str = Field(
+        default="",
+        description="URL (http/https) of a text file with one proxy link per line; "
+        "the pool cycles through working proxies. Falls back to `proxy` when empty",
+    )
+    proxy_check_timeout: float = Field(
+        default=10.0,
+        description="Per-proxy MTProto handshake timeout when cycling the pool",
+    )
 
     @property
     def modules_path(self) -> Path:
