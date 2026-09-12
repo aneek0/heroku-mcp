@@ -169,7 +169,12 @@ async def shutdown() -> None:
 
 
 async def _resolve_entity() -> Union[str, int, None]:
-    """Resolve her_chat_id to a Telethon entity (cached)."""
+    """Resolve her_chat_id to a Telethon entity (cached).
+
+    A freshly generated session has an empty entity cache, so resolving a
+    raw user ID fails with "Could not find the input entity". Fetching the
+    dialogs once warms the cache (access hashes) and makes the retry work.
+    """
     global _resolved_entity
     if _resolved_entity is not None:
         return _resolved_entity
@@ -180,10 +185,20 @@ async def _resolve_entity() -> Union[str, int, None]:
         return None
 
     client = await get_client()
+
+    async def _try_resolve() -> object:
+        try:
+            return await client.get_entity(int(chat_id))
+        except (ValueError, TypeError):
+            return await client.get_entity(chat_id)
+
     try:
-        entity = await client.get_entity(int(chat_id))
-    except (ValueError, TypeError):
-        entity = await client.get_entity(chat_id)
+        entity = await _try_resolve()
+    except ValueError:
+        # Fresh session: warm the entity cache from dialogs, retry once.
+        log.info("Entity %s not cached, fetching dialogs to warm cache", chat_id)
+        await client.get_dialogs(limit=100)
+        entity = await _try_resolve()
     _resolved_entity = entity
     return entity
 

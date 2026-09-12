@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
+import sys
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -189,6 +191,13 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     )
+
+    if os.environ.get("HEROKU_MCP_STDIO", "").strip().lower() in ("1", "true", "yes"):
+        # stdio transport for MCP clients that don't support streamable HTTP
+        # (e.g. jcode). Logs must NOT go to stdout — that is the protocol channel.
+        logging.basicConfig(level=logging.INFO, stream=sys.stderr, force=True)
+        mcp.run(transport="stdio")
+        return
 
     import uvicorn
 
