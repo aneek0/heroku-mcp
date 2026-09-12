@@ -13,7 +13,7 @@ Returns kwargs suitable for ``TelegramClient(session, api_id, api_hash, **kwargs
 
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import unquote, urlsplit
 
 from telethon.network.connection import (
     ConnectionTcpMTProxyAbridged,
@@ -32,10 +32,26 @@ _MTProto_CONNECTIONS = {
 _SOCKS_SCHEMES = {"socks5", "socks4", "http"}
 
 
-def _parse_mtproto(params: dict[str, list[str]], spec: str) -> dict:
-    server = (params.get("server") or [""])[0].strip()
-    port = (params.get("port") or [""])[0].strip()
-    secret = (params.get("secret") or [""])[0].strip()
+def _query_params(query: str) -> dict[str, str]:
+    """Parse query params WITHOUT form-style '+'-to-space decoding.
+
+    tg://proxy links embed base64 secrets that legitimately contain '+' and
+    '/'. urllib's parse_qs/parse_qsl treat '+' as space (form encoding),
+    silently corrupting such secrets into connection failures.
+    """
+    params = {}
+    for part in query.split("&"):
+        if not part:
+            continue
+        key, _, value = part.partition("=")
+        params[unquote(key)] = unquote(value)
+    return params
+
+
+def _parse_mtproto(params: dict[str, str], spec: str) -> dict:
+    server = params.get("server", "").strip()
+    port = params.get("port", "").strip()
+    secret = params.get("secret", "").strip()
 
     if not server or not port or not secret:
         raise ValueError(
@@ -114,20 +130,20 @@ def parse_proxy(spec: str) -> dict:
         parts = urlsplit(spec)
         # tg://proxy puts the kind in netloc; https://t.me/proxy in path.
         kind = (parts.path or parts.netloc).lstrip("/").lower()
-        params = parse_qs(parts.query)
+        params = _query_params(parts.query)
 
         if kind == "proxy":
             return _parse_mtproto(params, spec)
         if kind == "socks":
             # tg://socks?server=...&port=...&user=...&pass=...
-            server = (params.get("server") or [""])[0].strip()
-            port = (params.get("port") or [""])[0].strip()
+            server = params.get("server", "").strip()
+            port = params.get("port", "").strip()
             if not server or not port:
                 raise ValueError(
                     f"SOCKS proxy link must contain server and port, got: {spec!r}"
                 )
-            user = (params.get("user") or [""])[0]
-            password = (params.get("pass") or [""])[0]
+            user = params.get("user", "")
+            password = params.get("pass", "")
             uri = f"socks5://{server}:{port}"
             if user or password:
                 from urllib.parse import quote

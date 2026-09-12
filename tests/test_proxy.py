@@ -60,6 +60,28 @@ class ParseProxyMTProto(unittest.TestCase):
         )
         self.assertEqual(k["proxy"], ("1.2.3.4", 443, "cd" * 16))
 
+    def test_base64_secret_with_plus_and_slash_preserved(self):
+        """Base64 secrets legitimately contain '+' and '/'.
+
+        urllib's parse_qs/parse_qsl decode '+' as space (form encoding),
+        silently corrupting such secrets. The parser must preserve the
+        raw value byte-for-byte, whether raw or percent-encoded.
+        """
+        secret = "dd" + "u130d2ihiw+hPDYb4h1Oxg=="  # real b64 payload w/ '+' and '/'
+        k = parse_proxy(f"tg://proxy?server=1.2.3.4&port=443&secret={secret}")
+        self.assertEqual(k["proxy"][2], secret)
+
+        from urllib.parse import quote
+
+        k2 = parse_proxy(
+            f"tg://proxy?server=1.2.3.4&port=443&secret={quote(secret)}"
+        )
+        self.assertEqual(k2["proxy"][2], secret)
+
+    def test_empty_server_param_rejected(self):
+        with self.assertRaises(ValueError):
+            parse_proxy("tg://proxy?server=&port=443&secret=" + "ab" * 16)
+
 
 class ParseProxySocksHttp(unittest.TestCase):
     def test_socks5_with_auth(self):
