@@ -38,11 +38,17 @@ event handler or poll fallback (`get_messages`).
 - Config: `config.yaml` → `HerokuMcpSettings` singleton
 - `her_chat_id` — target chat (default `"me"` = Saved Messages, or group ID)
 - `her_topic_id` — forum topic ID for group chats (0 = disabled)
+- `proxy` — optional proxy: `tg://proxy?server=…&port=…&secret=…` (MTProto, dd/ee/plain secrets), `socks5://[user:pass@]host:port`, `socks4://`, `http://`, `tg://socks?…`; parsed in `proxy.py`, invalid spec fails fast (no silent direct fallback); needs `python-socks[asyncio]` for SOCKS/HTTP
 - Blocked commands: `BLOCKED_COMMANDS` frozenset in `server.py`
 - Session lock: fcntl-based, handled in `telegram.py`
+- `get_client()` uses `connect()` + `is_user_authorized()` (NOT interactive `start()` — the phone prompt kills MCP sessions); retries connect 3×; unauthorized session → clear error pointing to `generate_session.py`
 - Module loading: write `.py`, serve via aiohttp, send `.dlm <url>` to userbot
-- Session generation: `generate_session.py`
+- Session generation: `generate_session.py` (honors proxy)
 
 ## Tests
 
-No test framework configured. Run manually: `python -m heroku_mcp.server`
+Offline unit tests (no network):
+
+    .venv/bin/python -m unittest discover -s tests -v
+
+Covers: proxy parser (MTProto dd/ee/plain, socks5/4, http, tg://socks, invalid specs), log descriptions never leak secrets/passwords, TelegramClient construction with each proxy kind, yaml/env precedence for the proxy key.

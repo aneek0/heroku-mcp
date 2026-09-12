@@ -13,11 +13,14 @@ MCP server for managing a Heroku Telegram userbot.
 
 ```bash
 pip install -e .
-python generate_session.py   # create Telegram session file
+python generate_session.py --phone +<number>   # create Telegram session (honors proxy)
 cp config.example.yaml config.yaml
-# edit config.yaml with your api_id, api_hash
+# edit config.yaml with your api_id, api_hash, proxy
 python -m heroku_mcp.server
 ```
+
+If the MCP server reports "Telegram session is not authorized", (re)run
+`generate_session.py` — it works through the proxy from config.yaml.
 
 ## Configuration
 
