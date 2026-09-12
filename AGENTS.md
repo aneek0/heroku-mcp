@@ -44,6 +44,7 @@ event handler or poll fallback (`get_messages`).
 - `get_client()` uses `connect()` + `is_user_authorized()` (NOT interactive `start()` — the phone prompt kills MCP sessions); retries connect 3×; unauthorized session → clear error pointing to `generate_session.py`; after authorizing, retry the tool — no server restart needed (lifespan survives Telegram failures, tools re-create the client)
 - Module loading: write `.py`, serve via aiohttp, send `.dlm <url>` to userbot
 - Session generation: `generate_session.py` (honors proxy, respects the session lock)
+- Transports: default streamable HTTP on 127.0.0.1:6767; `HEROKU_MCP_STDIO=1` switches to stdio (for stdio-only clients like jcode; logs go to stderr — stdout is the protocol channel). One instance per session: the flock forbids HTTP+stdio simultaneously
 
 ## Tests
 

@@ -16,8 +16,35 @@ pip install -e .
 python generate_session.py --phone +<number>   # create Telegram session (honors proxy)
 cp config.example.yaml config.yaml
 # edit config.yaml with your api_id, api_hash, proxy
-python -m heroku_mcp.server
+python -m heroku_mcp.server                    # streamable HTTP on 127.0.0.1:6767
 ```
+
+### stdio mode (for stdio-only MCP clients)
+
+Some MCP clients only support stdio transport (e.g. jcode). Set
+`HEROKU_MCP_STDIO=1` to speak MCP over stdin/stdout instead of HTTP:
+
+```bash
+HEROKU_MCP_STDIO=1 python -m heroku_mcp.server
+```
+
+Example jcode registration (`~/.jcode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "heroku-mcp": {
+      "command": "/path/to/heroku-mcp/.venv/bin/python",
+      "args": ["-m", "heroku_mcp.server"],
+      "env": { "HEROKU_MCP_STDIO": "1" },
+      "shared": true
+    }
+  }
+}
+```
+
+Only one instance can hold the Telegram session lock at a time: don't run
+the HTTP and stdio servers simultaneously on the same session.
 
 If the MCP server reports "Telegram session is not authorized", (re)run
 `generate_session.py` — it works through the proxy from config.yaml and
