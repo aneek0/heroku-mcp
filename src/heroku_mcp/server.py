@@ -30,7 +30,15 @@ _BLOCKED_PREFIXES = [f"{cmd} " for cmd in BLOCKED_COMMANDS]
 @asynccontextmanager
 async def _lifespan_ctx(app: FastMCP) -> AsyncIterator[None]:
     """Startup / shutdown lifecycle."""
-    await ensure_watcher()
+    try:
+        await ensure_watcher()
+    except Exception as e:
+        # Telegram problems (unauthorized session, invalid proxy, unreachable
+        # network) must not crash the MCP session at initialize: then the
+        # client would just hang with no actionable message. Tools call
+        # get_client() themselves and the SDK converts the exception into an
+        # isError tool result the client can actually see.
+        log.warning("Telegram unavailable at startup; tools will report it: %s", e)
     await start_http()
     log.info("Heroku MCP server ready on :%d", settings.server_port)
     yield
