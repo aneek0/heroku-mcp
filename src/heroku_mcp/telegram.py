@@ -118,7 +118,8 @@ async def get_client() -> TelegramClient:
                     raise RuntimeError(
                         "Telegram session is not authorized. Run "
                         "'python generate_session.py --phone +<number>' to log in"
-                        " (it honors the proxy setting), then restart the MCP server."
+                        " (it honors the proxy setting), then retry this tool -"
+                        " no server restart is needed."
                     )
             except Exception as e:
                 if "locked" not in str(e).lower():
@@ -141,7 +142,8 @@ async def get_client() -> TelegramClient:
                     raise RuntimeError(
                         "Telegram session is not authorized. Run "
                         "'python generate_session.py --phone +<number>' to log in"
-                        " (it honors the proxy setting), then restart the MCP server."
+                        " (it honors the proxy setting), then retry this tool -"
+                        " no server restart is needed."
                     )
         except Exception:
             if _client is not None:

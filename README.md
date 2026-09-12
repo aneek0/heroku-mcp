@@ -20,7 +20,10 @@ python -m heroku_mcp.server
 ```
 
 If the MCP server reports "Telegram session is not authorized", (re)run
-`generate_session.py` — it works through the proxy from config.yaml.
+`generate_session.py` — it works through the proxy from config.yaml and
+refuses to start if a server instance is holding the session lock (stop
+that instance first). After authorizing, just retry the tool — no server
+restart is needed.
 
 ## Configuration
 

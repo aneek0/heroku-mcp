@@ -8,6 +8,7 @@
 
 import argparse
 import asyncio
+import fcntl
 import os
 import sys
 from pathlib import Path
@@ -43,6 +44,35 @@ def parse_args():
     parser.add_argument("--api-id", type=int, help="API ID (из my.telegram.org)")
     parser.add_argument("--api-hash", help="API Hash (из my.telegram.org)")
     return parser.parse_args()
+
+
+def _acquire_session_lock(session_path: Path):
+    """Same flock protocol as the MCP server (telegram.py _acquire_session_lock).
+
+    Refuses to touch the SQLite session while another process holds it
+    instead of racing it into 'database is locked' errors. Exits with
+    actionable guidance when the lock is taken.
+    """
+    lock_path = session_path.with_suffix(".session.lock")
+    fd = open(lock_path, "w")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("⚠️  Сессия занята другим процессом (похоже, запущен MCP-сервер).")
+        print("    Останови его (Ctrl+C) и запусти generate_session.py снова,")
+        print("    затем просто перезапусти инструмент в клиенте — рестарт сервера не нужен.")
+        sys.exit(1)
+    fd.write(str(os.getpid()))
+    fd.flush()
+    return fd
+
+
+def _release_session_lock(lock_fd) -> None:
+    try:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    lock_fd.close()
 
 
 def _load_creds(args):
@@ -103,96 +133,103 @@ async def main():
         print(f"Proxy: {proxy_description(_load_proxy())}")
     print()
 
-    client = TelegramClient(str(session_path), api_id, api_hash, **proxy_kwargs)
-    await client.connect()
+    # Same flock protocol as the MCP server (telegram.py _acquire_session_lock):
+    # refuse to write the SQLite session while another process (e.g. a running
+    # server) holds it, instead of racing it into 'database is locked' errors.
+    lock_fd = _acquire_session_lock(session_path)
+    try:
+        client = TelegramClient(str(session_path), api_id, api_hash, **proxy_kwargs)
+        await client.connect()
 
-    if await client.is_user_authorized():
+        if await client.is_user_authorized():
+            me = await client.get_me()
+            print(f"Сессия уже авторизована: {me.first_name} (ID: {me.id})")
+            await client.disconnect()
+            return
+
+        if args.phone:
+            phone = args.phone
+            print(f"Отправка кода на {phone}...")
+
+            try:
+                await client.send_code_request(phone)
+            except Exception as e:
+                print(f"Ошибка отправки кода: {e}")
+                await client.disconnect()
+                sys.exit(1)
+
+            # Код передаём через аргумент или временный файл
+            code = input("Введи код: ").strip()
+            if not code:
+                print("Код не введён. Отмена.")
+                await client.disconnect()
+                sys.exit(1)
+
+            try:
+                await client.sign_in(phone, code)
+            except SessionPasswordNeededError:
+                if args.password:
+                    password = args.password
+                else:
+                    password = input("🔐 Требуется пароль 2FA: ").strip()
+                await client.sign_in(password=password)
+            except Exception as e:
+                print(f"Ошибка входа: {e}")
+                await client.disconnect()
+                sys.exit(1)
+
+        elif args.qr:
+            print("Генерирую QR-код...\n")
+
+            try:
+                qr_login = await client.qr_login()
+            except Exception as e:
+                print(f"Ошибка генерации QR: {e}")
+                print("Возможно, включена 2FA. Используй --phone.")
+                await client.disconnect()
+                sys.exit(1)
+
+            print("╔══════════════════════════════════════════╗")
+            print("║  Отсканируй QR-код в приложении Telegram  ║")
+            print("║  (Настройки → Устройства → Привязать      ║")
+            print("║   устройство → Сканировать QR)            ║")
+            print("╚══════════════════════════════════════════╝\n")
+
+            try:
+                import qrcode
+                qr = qrcode.QRCode()
+                qr.add_data(qr_login.url)
+                qr.make()
+                qr.print_ascii(invert=True)
+            except ImportError:
+                print(f"Ссылка (отсканируй вручную): {qr_login.url}")
+
+            print("\nОжидание сканирования...")
+
+            try:
+                await qr_login.wait(timeout=120)
+            except TimeoutError:
+                print("\n⏰ Таймаут. QR-код просрочен, запусти скрипт заново.")
+                await client.disconnect()
+                sys.exit(1)
+            except SessionPasswordNeededError:
+                if args.password:
+                    password = args.password
+                else:
+                    password = input("🔐 Требуется пароль 2FA: ").strip()
+                await client.sign_in(password=password)
+
         me = await client.get_me()
-        print(f"Сессия уже авторизована: {me.first_name} (ID: {me.id})")
+        print(f"\n✅ Успешно авторизовано!")
+        print(f"   Пользователь: {me.first_name} {me.last_name or ''}")
+        print(f"   ID: {me.id}")
+        if me.username:
+            print(f"   Username: @{me.username}")
+        print(f"\nСессия сохранена: {session_path}.session")
+
         await client.disconnect()
-        return
-
-    if args.phone:
-        phone = args.phone
-        print(f"Отправка кода на {phone}...")
-
-        try:
-            await client.send_code_request(phone)
-        except Exception as e:
-            print(f"Ошибка отправки кода: {e}")
-            await client.disconnect()
-            sys.exit(1)
-
-        # Код передаём через аргумент или временный файл
-        code = input("Введи код: ").strip()
-        if not code:
-            print("Код не введён. Отмена.")
-            await client.disconnect()
-            sys.exit(1)
-
-        try:
-            await client.sign_in(phone, code)
-        except SessionPasswordNeededError:
-            if args.password:
-                password = args.password
-            else:
-                password = input("🔐 Требуется пароль 2FA: ").strip()
-            await client.sign_in(password=password)
-        except Exception as e:
-            print(f"Ошибка входа: {e}")
-            await client.disconnect()
-            sys.exit(1)
-
-    elif args.qr:
-        print("Генерирую QR-код...\n")
-
-        try:
-            qr_login = await client.qr_login()
-        except Exception as e:
-            print(f"Ошибка генерации QR: {e}")
-            print("Возможно, включена 2FA. Используй --phone.")
-            await client.disconnect()
-            sys.exit(1)
-
-        print("╔══════════════════════════════════════════╗")
-        print("║  Отсканируй QR-код в приложении Telegram  ║")
-        print("║  (Настройки → Устройства → Привязать      ║")
-        print("║   устройство → Сканировать QR)            ║")
-        print("╚══════════════════════════════════════════╝\n")
-
-        try:
-            import qrcode
-            qr = qrcode.QRCode()
-            qr.add_data(qr_login.url)
-            qr.make()
-            qr.print_ascii(invert=True)
-        except ImportError:
-            print(f"Ссылка (отсканируй вручную): {qr_login.url}")
-
-        print("\nОжидание сканирования...")
-
-        try:
-            await qr_login.wait(timeout=120)
-        except TimeoutError:
-            print("\n⏰ Таймаут. QR-код просрочен, запусти скрипт заново.")
-            await client.disconnect()
-            sys.exit(1)
-        except SessionPasswordNeededError:
-            if args.password:
-                password = args.password
-            else:
-                password = input("🔐 Требуется пароль 2FA: ").strip()
-            await client.sign_in(password=password)
-
-    me = await client.get_me()
-    print(f"\n✅ Успешно авторизовано!")
-    print(f"   Пользователь: {me.first_name} {me.last_name or ''}")
-    print(f"   ID: {me.id}")
-    if me.username:
-        print(f"   Username: @{me.username}")
-    print(f"\nСессия сохранена: {session_path}.session")
-
-    await client.disconnect()
+    finally:
+        _release_session_lock(lock_fd)
 
 
 if __name__ == "__main__":
