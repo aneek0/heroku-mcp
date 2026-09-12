@@ -85,19 +85,47 @@ async def get_client() -> TelegramClient:
             raise RuntimeError("Cannot acquire session lock — another process holds it. Try again later.")
         _client = _build_client()
         try:
-            await _client.start()
-        except Exception as e:
-            # If session is locked (another process holds it), kill stale once and retry
-            if "locked" in str(e).lower():
-                log.warning("Session locked, killing stale processes and retrying: %s", e)
-                _kill_stale_session()
-                await asyncio.sleep(1)
-                _client = _build_client()
-                await _client.start()
+            for attempt in range(1, 4):
+                try:
+                    # Telethon 1.44: connect() returns None on success and
+                    # raises on failure; sender.connect returns False only
+                    # when already connected (which is also fine).
+                    await _client.connect()
+                    break
+                except Exception as e:
+                    log.warning("Telethon connect failed (attempt %d/3): %s", attempt, e)
+                if attempt < 3:
+                    try:
+                        await _client.disconnect()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
             else:
+                raise ConnectionError(
+                    "Could not connect to Telegram via "
+                    f"{proxy_description(settings.proxy) if settings.proxy.strip() else 'direct connection'}. "
+                    "Check the proxy/network."
+                )
+            if not await _client.is_user_authorized():
+                await _client.disconnect()
+                _client = None
                 _release_session_lock()
-                raise
-        log.info("Telethon client connected (user %s)", settings.api_id)
+                raise RuntimeError(
+                    "Telegram session is not authorized. Run "
+                    "'python generate_session.py --phone +<number>' to log in"
+                    " (it honors the proxy setting), then restart the MCP server."
+                )
+        except Exception:
+            if _client is not None:
+                try:
+                    await _client.disconnect()
+                except Exception:
+                    pass
+                _client = None
+            _release_session_lock()
+            raise
+        log.info("Telethon client connected (api_id=%s, dc=%s)",
+                 settings.api_id, _client.session.dc_id)
     return _client
 
 
