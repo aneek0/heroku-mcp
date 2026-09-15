@@ -87,25 +87,38 @@ configuration — they are not necessarily the interface `ip route` prefers.
 
 jcode reads `mcp.json` but only launches command-based servers: an entry with
 `"type": "http"`/`"sse"` is skipped with a log line. Bridge the remote endpoint
-with `mcp-remote`, which speaks stdio to the client and streamable HTTP to us:
+with `mcp-remote`, which speaks stdio to the client and streamable HTTP to us.
+jcode expands `${VAR}` in args from **its own** environment, not from the
+server's `env` block, so the reliable shape is a small wrapper that reads the
+token from a file:
+
+```bash
+# ~/.local/bin/heroku-mcp-remote
+#!/usr/bin/env bash
+export HEROKU_MCP_TOKEN="$(<~/.heroku-mcp-token)"
+exec npx -y mcp-remote@latest "${HEROKU_MCP_URL:-http://100.71.96.174:6767/mcp}" \
+    --header 'Authorization: Bearer ${HEROKU_MCP_TOKEN}' \
+    --transport http-only --allow-http
+```
 
 ```json
 {
   "servers": {
     "heroku-mcp-remote": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote@latest", "http://100.71.96.174:6767/mcp",
-               "--header", "Authorization: Bearer ${HEROKU_MCP_TOKEN}",
-               "--transport", "http-only", "--allow-http"],
-      "env": { "HEROKU_MCP_TOKEN": "<token>" }
+      "command": "/home/you/.local/bin/heroku-mcp-remote",
+      "args": [], "env": {}, "shared": false
     }
   }
 }
 ```
 
 `--allow-http` is required because the URL is plain HTTP (put TLS in front with
-a reverse proxy to drop it). `${HEROKU_MCP_TOKEN}` is expanded by `mcp-remote`
-from the child environment, so the token stays out of the URL itself.
+a reverse proxy to drop it). The token lives in a 0600 file rather than
+`mcp.json`. `mcp-remote` still expands `${HEROKU_MCP_TOKEN}` into its own node
+`argv`, so the secret is readable from `/proc` by the same user — unavoidable
+with this bridge. Set `shared: false`: a shared server is registered with the
+long-lived `jcode serve` supervisor, which is not restarted when you only
+restart your session and can keep a dead handle after the child exits.
 
 TLS is not terminated here — use a reverse proxy, or an SSH/cloudflare tunnel
 in front. `allow_unauthenticated: true` skips the token check on a remote bind
