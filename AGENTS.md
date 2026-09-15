@@ -44,7 +44,18 @@ event handler or poll fallback (`get_messages`).
 - `get_client()` uses `connect()` + `is_user_authorized()` (NOT interactive `start()` — the phone prompt kills MCP sessions); retries connect 3×; unauthorized session → clear error pointing to `generate_session.py`; after authorizing, retry the tool — no server restart needed (lifespan survives Telegram failures, tools re-create the client)
 - Module loading: write `.py`, serve via aiohttp, send `.dlm <url>` to userbot
 - Session generation: `generate_session.py` (honors proxy, respects the session lock)
-- Transports: default streamable HTTP on 127.0.0.1:6767; `HEROKU_MCP_STDIO=1` switches to stdio (for stdio-only clients like jcode; logs go to stderr — stdout is the protocol channel). One instance per session: the flock forbids HTTP+stdio simultaneously
+- Transports: default streamable HTTP on `server_host` (loopback) :6767 at `/mcp`; `HEROKU_MCP_STDIO=1`
+  switches to stdio (for stdio-only clients like jcode; logs go to stderr — stdout is the protocol
+  channel). One instance per session: the flock forbids HTTP+stdio simultaneously
+- Remote HTTP: `server_host` is configurable; a non-loopback bind **refuses to start** without
+  `auth_token` (`validate_http_security()`, fail-fast like an invalid `proxy`). Bearer token is checked
+  by the `Guard` ASGI wrapper in `server.py` (401), `GET` → 405 except open `/healthz`. FastMCP's
+  DNS-rebinding protection is built from settings (`transport_security()` / `allowed_hosts`), otherwise
+  remote clients get 421
+- `.dlm` URLs: `settings.module_url(name, port)` — `module_base_url` (tunnel/reverse proxy, scheme
+  required) wins, else the bind address (`module_host`, defaulting to `server_host`; wildcard binds use
+  `detect_local_ip()`). The module store serves raw sources with no auth, so
+  `warn_if_module_store_public()` logs at startup when it is reachable off-box
 
 ## Tests
 
@@ -52,4 +63,4 @@ Offline unit tests (no network):
 
     .venv/bin/python -m unittest discover -s tests -v
 
-Covers: proxy parser (MTProto dd/ee/plain, socks5/4, http, tg://socks, invalid specs), log descriptions never leak secrets/passwords, TelegramClient construction with each proxy kind, yaml/env precedence for the proxy key, lifespan survives Telegram startup failures (unauthorized/network errors, module store still starts), generate_session.py flock acquire/release + refusal with actionable guidance when the lock is held.
+Covers: proxy parser (MTProto dd/ee/plain, socks5/4, http, tg://socks, invalid specs), log descriptions never leak secrets/passwords, TelegramClient construction with each proxy kind, yaml/env precedence for the proxy key, lifespan survives Telegram startup failures (unauthorized/network errors, module store still starts), generate_session.py flock acquire/release + refusal with actionable guidance when the lock is held, remote HTTP transport (loopback default, fail-fast without a token, Guard 401/405/health, DNS-rebinding host lists, `.dlm` URL derivation and module-store bind).

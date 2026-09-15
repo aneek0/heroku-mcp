@@ -3,6 +3,25 @@ heroku_mcp:
   api_hash: abcdef1234567890abcdef1234567890  # замени на свой
   session_path: sessions/heroku_mcp
   server_port: 6767
+
+  # --- Удалённый доступ по HTTP (streamable HTTP, эндпоинт POST /mcp) ---
+  # Адрес, на котором слушать MCP. 127.0.0.1 = только локально (по умолчанию).
+  # Любой другой адрес открывает порт сети, поэтому без auth_token сервер
+  # откажется запускаться. Проще оставить 127.0.0.1 и идти по туннелю:
+  #   ssh -N -L 6767:127.0.0.1:6767 user@server
+  server_host: 127.0.0.1
+  # Токен для каждого запроса: "Authorization: Bearer <token>" (или "X-Api-Key: <token>").
+  # Сгенерировать: openssl rand -hex 32
+  # auth_token: ""
+  # Только для доверенной сети: разрешить внешний bind без токена (при старте
+  # будет предупреждение в лог).
+  # allow_unauthenticated: false
+  # Дополнительные значения Host/Origin, которые примет DNS-rebinding защита
+  # (домен туннеля или reverse proxy). В env — JSON-список.
+  # allowed_hosts:
+  #   - mcp.example.com
+  # module_base_url: https://mcp.example.com/modules
+
   # Куда отправляются команды. Варианты:
   #   "me"                     — Saved Messages
   #   "@username" или id        — чат/канал

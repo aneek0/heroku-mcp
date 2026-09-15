@@ -46,6 +46,70 @@ Example jcode registration (`~/.jcode/mcp.json`):
 Only one instance can hold the Telegram session lock at a time: don't run
 the HTTP and stdio servers simultaneously on the same session.
 
+## Remote HTTP access
+
+The default transport already is streamable HTTP (JSON-RPC on `POST /mcp`), so
+"remote" mostly means binding to a reachable address and protecting the port.
+
+**Recommended: keep loopback, tunnel in.** Nothing is exposed, no token needed:
+
+```bash
+python -m heroku_mcp.server                      # on the server, binds 127.0.0.1:6767
+ssh -N -L 6767:127.0.0.1:6767 user@server        # on your machine
+# MCP client connects to http://127.0.0.1:6767/mcp
+```
+
+**Bind to an interface directly** (LAN, container, or behind a reverse proxy).
+A non-loopback `server_host` is refused without `auth_token`, so the server
+cannot be reached by whoever finds the port:
+
+```bash
+export HEROKU_MCP_SERVER_HOST=10.0.0.5
+export HEROKU_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
+python -m heroku_mcp.server
+```
+
+Clients send the token as `Authorization: Bearer <token>` (or `X-Api-Key:
+<token>`) to `http://10.0.0.5:6767/mcp`. Bad or missing token → `401`,
+`GET /mcp` → `405`, `GET /healthz` → `200` (open, for uptime checks), an
+unexpected `Host` header → `421`. Set `allowed_hosts` when a tunnel or reverse
+proxy rewrites `Host` (e.g. `mcp.example.com`); env expects a JSON list:
+
+```bash
+export HEROKU_MCP_ALLOWED_HOSTS='["mcp.example.com"]'
+```
+
+TLS is not terminated here — use a reverse proxy, or an SSH/cloudflare tunnel
+in front. `allow_unauthenticated: true` skips the token check on a remote bind
+for a trusted network; the server logs a warning when it starts.
+
+### `.dlm` module loading over a distance
+
+`load_module` writes the source locally, serves it over HTTP and hands the URL
+to the userbot. The URL must be reachable **by the userbot**, which is not the
+same thing as reachable by your MCP client: it used to be hardcoded to
+`127.0.0.1`, so loading only worked while MCP and the userbot shared a machine.
+The store now follows `server_host` (override with `module_host`), which means a
+remote bind publishes module sources — the server warns about it at startup.
+
+* MCP and userbot on the same box: nothing to do (default).
+* Reachable network address: `server_host`/`module_host` = that address, and the
+  URL is derived from it.
+* Anything else (the usual case across the internet — the userbot sits on
+  another host): keep the store local and point the userbot at something it can
+  reach, e.g. `module_host: 127.0.0.1` plus a port forward or tunnel:
+
+```yaml
+heroku_mcp:
+  server_host: "10.0.0.5"     # MCP endpoint for remote clients
+  module_host: "127.0.0.1"    # keep sources local
+  module_base_url: "https://mcp.example.com/modules"   # -> /modules/<name>.py
+```
+
+`module_base_url` wins over the derived URL and must include a scheme. Without
+a URL the userbot can fetch, `load_module` cannot work — the other tools
+(commands, evaluate, restart, history) are unaffected.
+
 If the MCP server reports "Telegram session is not authorized", (re)run
 `generate_session.py` — it works through the proxy from config.yaml and
 refuses to start if a server instance is holding the session lock (stop
@@ -62,6 +126,12 @@ Config via `config.yaml` or environment variables with `HEROKU_MCP_` prefix:
 | `api_hash` | `HEROKU_MCP_API_HASH` | — | Telegram API hash |
 | `session_path` | `HEROKU_MCP_SESSION_PATH` | `sessions/heroku_mcp` | Path to Telethon session file |
 | `server_port` | `HEROKU_MCP_SERVER_PORT` | `6767` | MCP server port |
+| `server_host` | `HEROKU_MCP_SERVER_HOST` | `127.0.0.1` | HTTP bind address; non-loopback requires `auth_token` |
+| `auth_token` | `HEROKU_MCP_AUTH_TOKEN` | — | Bearer token for every HTTP request (empty = disabled) |
+| `allow_unauthenticated` | `HEROKU_MCP_ALLOW_UNAUTHENTICATED` | `false` | Permit a remote bind with no token (trusted network only) |
+| `allowed_hosts` | `HEROKU_MCP_ALLOWED_HOSTS` | `[]` | Extra `Host`/Origin values (JSON list in env), e.g. a tunnel domain |
+| `module_host` | `HEROKU_MCP_MODULE_HOST` | = `server_host` | Bind address of the `.dlm` module store |
+| `module_base_url` | `HEROKU_MCP_MODULE_BASE_URL` | — | Public base URL the userbot fetches modules from |
 | `modules_dir` | `HEROKU_MCP_MODULES_DIR` | `modules` | Directory for module files |
 | `her_chat_id` | `HEROKU_MCP_HER_CHAT_ID` | `me` | Target chat — `"me"` for Saved Messages, or a group/channel ID for a dedicated log group |
 | `her_topic_id` | `HEROKU_MCP_HER_TOPIC_ID` | `0` | Forum topic ID within `her_chat_id` (0 = disabled) |

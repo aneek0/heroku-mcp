@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -50,7 +51,8 @@ async def _lifespan_ctx(app: FastMCP) -> AsyncIterator[None]:
         # isError tool result the client can actually see.
         log.warning("Telegram unavailable at startup; tools will report it: %s", e)
     await start_http()
-    log.info("Heroku MCP server ready on :%d", settings.server_port)
+    settings.warn_if_module_store_public()
+    log.info("Heroku MCP server ready on %s:%d", settings.server_host, settings.server_port)
     yield
     await stop_http()
     await shutdown()
@@ -60,7 +62,11 @@ mcp = FastMCP(
     "heroku-mcp",
     instructions="MCP server for managing the Heroku Telegram userbot",
     lifespan=_lifespan_ctx,
+    host=settings.server_host or "127.0.0.1",
     port=settings.server_port,
+    # FastMCP only guesses loopback names, which rejects every remote client
+    # with 421. Build the list from the settings instead.
+    transport_security=settings.transport_security(),
 )
 
 
@@ -85,6 +91,61 @@ async def _execute(cmd: str, wait: float = 5.0) -> str:
     return await send_command(cmd, wait=wait)
 
 
+# MCP session ids are bearer-equivalent (each carries a live Telegram-backed
+# session), so health probes are the only paths exempt from the token.
+OPEN_PATHS = frozenset({"/healthz", "/health"})
+
+
+def _supplied_token(headers: dict[bytes, bytes]) -> str:
+    """Token as `Authorization: Bearer <t>` or `X-Api-Key: <t>`."""
+    for name in (b"authorization", b"x-api-key"):
+        for key, value in headers.items():
+            if key != name:
+                continue
+            raw = value.decode("latin-1").strip()
+            if raw.lower().startswith("bearer "):
+                raw = raw[7:].strip()
+            if raw:
+                return raw
+    return ""
+
+
+def _authorized(headers: dict[bytes, bytes]) -> bool:
+    if not settings.auth_token:
+        return True
+    supplied = _supplied_token(headers)
+    return bool(supplied) and hmac.compare_digest(supplied, settings.auth_token)
+
+
+class Guard:
+    """ASGI wrapper: 405 for GET (except health), 401 for a bad token.
+
+    The token is checked at the transport edge rather than per tool, so a
+    rejected client never reaches the Telegram layer at all.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        from starlette.responses import PlainTextResponse
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if scope["method"] == "GET":
+            if path in OPEN_PATHS:
+                await PlainTextResponse("ok", 200)(scope, receive, send)
+            else:
+                await PlainTextResponse("Method Not Allowed", 405)(scope, receive, send)
+            return
+        if not _authorized(dict(scope.get("headers") or {})):
+            await PlainTextResponse("Unauthorized", 401)(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
 @mcp.tool()
 async def load_module(name: str, code: str) -> str:
     """Save a Python module, serve it via HTTP, and send .dlm to Heroku. Also works to update an already-loaded module without unloading it first."""
@@ -95,7 +156,8 @@ async def load_module(name: str, code: str) -> str:
     await start_http()
 
     port = get_bound_port() or (settings.server_port + 1)
-    url = f"http://127.0.0.1:{port}/{name}.py"
+    url = settings.module_url(name, port)
+    log.info("Serving module %s to the userbot at %s", name, url)
     response = await _execute(f".dlm {url}", wait=8.0)
     return response
 
@@ -243,27 +305,18 @@ def main() -> None:
         mcp.run(transport="stdio")
         return
 
+    # Fail fast before binding a port: an exposed MCP endpoint without a token
+    # is an exposed userbot.
+    settings.validate_http_security()
+
     import uvicorn
 
-    from starlette.responses import PlainTextResponse
-    from starlette.types import ASGIApp, Receive, Scope, Send
-
-    class RejectGet:
-        def __init__(self, app: ASGIApp):
-            self.app = app
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-            if scope["type"] == "http" and scope["method"] == "GET":
-                response = PlainTextResponse("Method Not Allowed", 405)
-                await response(scope, receive, send)
-            else:
-                await self.app(scope, receive, send)
-
     starlette_app = mcp.streamable_http_app()
-    wrapped = RejectGet(starlette_app)
+    wrapped = Guard(starlette_app)
 
     config = uvicorn.Config(
         wrapped,
-        host="127.0.0.1",
+        host=settings.server_host or "127.0.0.1",
         port=settings.server_port,
         log_level="info",
     )

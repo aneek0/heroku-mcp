@@ -36,12 +36,13 @@ async def start_server() -> None:
     await _runner.setup()
 
     # Try configured port +1, then scan upward
+    bind_host = settings.module_bind_host
     for port in range(settings.server_port + 1, settings.server_port + 101):
         try:
-            site = web.TCPSite(_runner, "127.0.0.1", port)
+            site = web.TCPSite(_runner, bind_host, port)
             await site.start()
             _bound_port = port
-            log.info("Module server listening on :%d", port)
+            log.info("Module server listening on %s:%d", bind_host, port)
             return
         except OSError:
             continue
