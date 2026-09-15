@@ -15,9 +15,18 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from mcp.server.transport_security import TransportSecurityMiddleware
+
 from heroku_mcp import config as config_mod
 from heroku_mcp import server
 from heroku_mcp.config import HerokuMcpSettings, load_settings
+
+
+class TransportSecurityMiddlewareProbe(TransportSecurityMiddleware):
+    """Expose the SDK's (underscore-private) host check under a stable name."""
+
+    def validate_host(self, host: str) -> bool:
+        return self._validate_host(host)
 
 
 def _settings(**overrides) -> HerokuMcpSettings:
@@ -111,7 +120,6 @@ class ModuleUrl(unittest.TestCase):
         st = _settings(server_host="0.0.0.0", auth_token="t")
         with mock.patch.object(config_mod, "detect_local_ip", return_value="203.0.113.9"):
             self.assertEqual(st.module_url("m", 6768), "http://203.0.113.9:6768/m.py")
-
     def test_base_url_wins_and_strips_trailing_slash(self):
         st = _settings(module_base_url="https://tunnel.invalid:6768/")
         self.assertEqual(st.module_url("m", 6768), "https://tunnel.invalid:6768/m.py")
@@ -150,6 +158,48 @@ class ModuleUrl(unittest.TestCase):
         warn.assert_not_called()
 
 
+class LocalInterfaceIps(unittest.TestCase):
+    """A 0.0.0.0 bind is reachable on every interface address — VPN included.
+
+    Regression found while wiring the user's NetBird host (netbo, 100.71.x):
+    using only detect_local_ip() left the tunnel address out of the Host
+    allowlist, so remote clients over NetBird got 421 on their own connect.
+    """
+
+    IP_OUTPUT = """1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever
+1: lo    inet6 ::1/128 scope host noprefixroute \\       valid_lft forever
+3: wlp3s0    inet 192.168.10.175/24 brd 192.168.10.255 scope global dynamic \\       valid_lft 1s
+4: wt0    inet 100.71.96.174/16 brd 100.71.255.255 scope global wt0\\       valid_lft forever
+4: wt0    inet6 fd7a:115c:a1e0::1234/128 scope global \\       valid_lft forever
+5: tap0    inet6 fe80::42/64 scope link \\       valid_lft forever
+"""
+
+    def test_parses_all_unicast_addresses(self):
+        with mock.patch.object(config_mod.subprocess, "run", return_value=mock.Mock(stdout=self.IP_OUTPUT)):
+            hosts = config_mod.local_interface_ips()
+        self.assertIn("127.0.0.1", hosts)
+        self.assertIn("192.168.10.175", hosts)
+        self.assertIn("100.71.96.174", hosts)          # NetBird/tunnel address
+        self.assertIn("[fd7a:115c:a1e0::1234]", hosts)  # bracketed for Host form
+        self.assertNotIn("[fe80::42]", hosts)            # link-local skipped
+
+    def test_falls_back_to_outbound_ip_when_ip_missing(self):
+        with mock.patch.object(config_mod.subprocess, "run", side_effect=FileNotFoundError), \
+                mock.patch.object(config_mod, "detect_local_ip", return_value="203.0.113.7"):
+            self.assertEqual(config_mod.local_interface_ips(), ["203.0.113.7"])
+
+    def test_wildcard_bind_accepts_netbird_host(self):
+        """The tunnel address must pass even though it is not the outbound one."""
+        netbo_ips = ["127.0.0.1", "192.168.10.175", "100.71.96.174", "[fd7a::1]"]
+        with mock.patch.object(config_mod, "local_interface_ips", return_value=netbo_ips):
+            ts = _settings(server_host="0.0.0.0", auth_token="t").transport_security()
+        mw_from = TransportSecurityMiddlewareProbe(ts)
+        for h in ("100.71.96.174:6767", "192.168.10.175:6767", "127.0.0.1:6767", "localhost:6767"):
+            with self.subTest(h=h):
+                self.assertTrue(mw_from.validate_host(h))
+        self.assertFalse(mw_from.validate_host("198.51.100.7:6767"))  # foreign address
+
+
 class TransportSecurity(unittest.TestCase):
     def test_loopback_keeps_localhost_names(self):
         ts = _settings().transport_security()
@@ -171,8 +221,6 @@ class TransportSecurity(unittest.TestCase):
 
     def test_middleware_accepts_realistic_remote_request(self):
         """End-to-end through the SDK validator, not just our own lists."""
-        from mcp.server.transport_security import TransportSecurityMiddleware
-
         ts = _settings(server_host="10.1.2.3", auth_token="t").transport_security()
         mw = TransportSecurityMiddleware(ts)
         self.assertTrue(mw._validate_host("10.1.2.3:6767"))

@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import socket
+import subprocess
 from pathlib import Path
 from typing import Union
 
@@ -208,9 +209,9 @@ class HerokuMcpSettings(BaseSettings):
         bases = ["127.0.0.1", "localhost", "[::1]"]
         bind = self.server_host or "127.0.0.1"
         if bind in _WILDCARD_HOSTS:
-            # Any address of this box may be used; the outbound one covers the
-            # common LAN/public-IP case, extra names go in allowed_hosts.
-            bases.append(detect_local_ip())
+            # A wildcard bind answers on every address of this box — including
+            # VPN/tunnel ones — so all of them must pass the Host check.
+            bases.extend(local_interface_ips())
         elif bind not in _LOOPBACK_HOSTS:
             bases.append(f"[{bind}]" if ":" in bind and not bind.startswith("[") else bind)
         for raw in self.allowed_hosts:
@@ -299,6 +300,40 @@ def detect_local_ip() -> str:
         return "127.0.0.1"
     finally:
         sock.close()
+
+
+_addr_line = re.compile(r"\binet6?\s+(\S+)")
+
+
+def local_interface_ips() -> list[str]:
+    """Every unicast address assigned to this machine, as Host-header forms.
+
+    Needed because a wildcard bind (`0.0.0.0`) is reachable on any of them —
+    a VPN/tunnel address like a NetBird `100.x` one included, which is not the
+    address `detect_local_ip()` would report. IPv6 gets the bracket form so the
+    values match what clients actually send in `Host`. Returns the outbound
+    address alone if `ip` is unavailable (no iproute2 in some containers).
+    """
+    try:
+        out = subprocess.run(
+            ["ip", "-o", "addr", "show"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout
+    except Exception as e:  # missing binary, timeout, non-zero exit
+        log.debug("Could not list interface addresses (%s), using outbound IP", e)
+        return [detect_local_ip()]
+    hosts: list[str] = []
+    for raw in _addr_line.findall(out):
+        addr = raw.split("/", 1)[0].split("%", 1)[0]
+        if addr.startswith("169.254.") or addr.lower().startswith("fe80:"):
+            continue  # link-local: not a usable Host value
+        if ":" in addr:
+            addr = f"[{addr}]"
+        if addr not in hosts:
+            hosts.append(addr)
+    if "127.0.0.1" not in hosts:
+        hosts.insert(0, "127.0.0.1")
+    return hosts
 
 
 def _load_yaml_config() -> dict:
