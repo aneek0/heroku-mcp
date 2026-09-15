@@ -51,11 +51,17 @@ event handler or poll fallback (`get_messages`).
   `auth_token` (`validate_http_security()`, fail-fast like an invalid `proxy`). Bearer token is checked
   by the `Guard` ASGI wrapper in `server.py` (401), `GET` → 405 except open `/healthz`. FastMCP's
   DNS-rebinding protection is built from settings (`transport_security()` / `allowed_hosts`), otherwise
-  remote clients get 421
+  remote clients get 421. A `0.0.0.0` bind accepts every interface address (`local_interface_ips()`),
+  so VPN/tunnel IPs (NetBird, Tailscale) work without extra config
+- HTTP app: `build_http_app()` chains our lifespan around the SDK's. `streamable_http_app()` replaces
+  the Starlette lifespan with `session_manager.run()`, so a `lifespan=` passed to `FastMCP()` never
+  runs over HTTP — without the chain the module store never starts and the channel is never pre-synced
 - `.dlm` URLs: `settings.module_url(name, port)` — `module_base_url` (tunnel/reverse proxy, scheme
   required) wins, else the bind address (`module_host`, defaulting to `server_host`; wildcard binds use
-  `detect_local_ip()`). The module store serves raw sources with no auth, so
-  `warn_if_module_store_public()` logs at startup when it is reachable off-box
+  `detect_local_ip()`). The module store has no port setting: it binds `server_port + 1`. It serves raw
+  sources with no auth, so `warn_if_module_store_public()` logs at startup when it is reachable off-box
+- stdio-only clients (jcode) reach a remote server through `npx mcp-remote` with `--header
+  "Authorization: Bearer ${TOKEN}"` and `--allow-http` for plain HTTP
 
 ## Tests
 
