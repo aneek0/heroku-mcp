@@ -9,6 +9,7 @@ share a machine.
 """
 
 import asyncio
+import contextlib
 import os
 import unittest
 from pathlib import Path
@@ -311,6 +312,44 @@ class GuardTest(unittest.TestCase):
     def test_health_probe_needs_no_token(self):
         with mock.patch.object(server.settings, "auth_token", ""):
             self.assertEqual(self._call(self._scope("GET", "/healthz"))[0], 200)
+
+
+class HttpAppLifespan(unittest.TestCase):
+    """HTTP mode must run our startup, not only the SDK's session manager.
+
+    FastMCP.streamable_http_app() overwrites the Starlette lifespan with
+    session_manager.run(), which silently skipped our module-store startup and
+    Telegram pre-sync in HTTP mode while stdio ran them.
+    """
+
+    def test_chained_lifespan_runs_both(self):
+        events: list[str] = []
+
+        @contextlib.asynccontextmanager
+        async def our_lifespan(app):
+            events.append("ours-enter")
+            yield
+            events.append("ours-exit")
+
+        async def sdk_lifespan(scope_app):
+            events.append("sdk-enter")
+            yield
+            events.append("sdk-exit")
+
+        fake_app = mock.Mock()
+        # Starlette stores router.lifespan_context as a callable returning an
+        # async CM, not as a bare async generator function.
+        fake_app.router.lifespan_context = contextlib.asynccontextmanager(sdk_lifespan)
+
+        async def drive():
+            async with built.router.lifespan_context(fake_app):
+                pass
+
+        with mock.patch.object(server.mcp, "streamable_http_app", return_value=fake_app), \
+                mock.patch.object(server, "_lifespan_ctx", our_lifespan):
+            built = server.build_http_app()
+            asyncio.run(drive())
+        self.assertEqual(events, ["ours-enter", "sdk-enter", "sdk-exit", "ours-exit"])
 
 
 class ModuleStoreBind(unittest.TestCase):

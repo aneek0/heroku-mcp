@@ -292,6 +292,28 @@ async def switch_chat(chat: str, topic: int = 0) -> str:
     return await set_target_chat(chat, topic)
 
 
+def build_http_app():
+    """ASGI app for the streamable-HTTP transport, with our startup intact.
+
+    FastMCP.streamable_http_app() hands Starlette its own lifespan
+    (`session_manager.run()`) and thereby drops the `lifespan=` passed to
+    FastMCP(...). That makes the two transports behave differently: stdio
+    pre-syncs the channel and serves the module store, HTTP silently did
+    neither. Chain the two so the FastMCP lifespan runs in both modes.
+    """
+    app = mcp.streamable_http_app()
+    session_manager_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(scope_app):
+        async with _lifespan_ctx(mcp):
+            async with session_manager_lifespan(scope_app):
+                yield
+
+    app.router.lifespan_context = lifespan
+    return app
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -311,7 +333,7 @@ def main() -> None:
 
     import uvicorn
 
-    starlette_app = mcp.streamable_http_app()
+    starlette_app = build_http_app()
     wrapped = Guard(starlette_app)
 
     config = uvicorn.Config(
