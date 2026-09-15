@@ -79,6 +79,34 @@ proxy rewrites `Host` (e.g. `mcp.example.com`); env expects a JSON list:
 export HEROKU_MCP_ALLOWED_HOSTS='["mcp.example.com"]'
 ```
 
+Binding to `0.0.0.0` accepts the address of any interface of the machine, so
+VPN/tunnel addresses (NetBird, Tailscale, WireGuard) work without extra
+configuration — they are not necessarily the interface `ip route` prefers.
+
+### stdio-only clients (jcode and others)
+
+jcode reads `mcp.json` but only launches command-based servers: an entry with
+`"type": "http"`/`"sse"` is skipped with a log line. Bridge the remote endpoint
+with `mcp-remote`, which speaks stdio to the client and streamable HTTP to us:
+
+```json
+{
+  "servers": {
+    "heroku-mcp-remote": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "http://100.71.96.174:6767/mcp",
+               "--header", "Authorization: Bearer ${HEROKU_MCP_TOKEN}",
+               "--transport", "http-only", "--allow-http"],
+      "env": { "HEROKU_MCP_TOKEN": "<token>" }
+    }
+  }
+}
+```
+
+`--allow-http` is required because the URL is plain HTTP (put TLS in front with
+a reverse proxy to drop it). `${HEROKU_MCP_TOKEN}` is expanded by `mcp-remote`
+from the child environment, so the token stays out of the URL itself.
+
 TLS is not terminated here — use a reverse proxy, or an SSH/cloudflare tunnel
 in front. `allow_unauthenticated: true` skips the token check on a remote bind
 for a trusted network; the server logs a warning when it starts.
