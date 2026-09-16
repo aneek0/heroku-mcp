@@ -431,98 +431,26 @@ async def set_target_chat(chat: Union[str, int], topic: int = 0) -> str:
     return f"Commands will now be sent to: {where}{topic_str}"
 
 
-async def send_command(command: str, wait: float = 10.0) -> str:
-    """Send a command to the configured chat and wait for Heroku's response.
+async def send_command(command: str, wait: float = 15.0, quiet: float = 2.0) -> str:
+    """Send a command to the configured chat and return the *final* response.
 
-    The Heroku userbot typically *edits* the sent message with the result.
-    Uses ``MessageEdited`` event registered before sending for minimal latency.
+    The Heroku userbot typically *edits* the sent message with the result, and
+    some commands edit the same message several times (e.g. ``.dlm`` prints
+    "installing..." first and the load result a second later). To avoid
+    returning an intermediate stage, this tracks edits until no new edit
+    arrives for ``quiet`` seconds and returns the last text.
+
+    Typical latency is (command runtime) + ``quiet``; ``wait`` is only an
+    emergency ceiling for a hung command, not the expected duration.
 
     Args:
         command: The command string (e.g. '.help', '.e 1+1').
-        wait: Max seconds to wait for a response.
+        wait: Max seconds to wait overall.
+        quiet: Consider the message settled after this many seconds without a new edit.
 
     Returns:
-        The response text, or "(no response)" on timeout.
-    """
-    client = await get_client()
-    entity = await _resolve_entity()
-    topic = settings.her_topic_id or None
-
-    me = await client.get_me() if entity is None else None
-    target = entity or me
-    kwargs = {}
-    if topic:
-        kwargs["reply_to"] = topic
-
-    target_id = getattr(target, "id", None)
-
-    event_fut = asyncio.get_running_loop().create_future()
-    sent_id = None
-
-    @client.on(events.MessageEdited)
-    async def _on_edit(event):
-        if sent_id is not None and event.message.id != sent_id:
-            return
-        if target_id is not None and event.chat_id != target_id:
-            return
-        text = event.message.text or ""
-        if text and text != command and not event_fut.done():
-            event_fut.set_result(text)
-
-    poll_entity = entity or me
-    _poll_reconnected = False
-    try:
-        sent = await client.send_message(target, command, **kwargs)
-        sent_id = sent.id
-        log.info("Sent command: %s (msg_id=%d, chat=%s, topic=%s)",
-                 command, sent_id, settings.her_chat_id, topic)
-
-        deadline = asyncio.get_running_loop().time() + wait
-        poll_interval = 0.25
-        while asyncio.get_running_loop().time() < deadline:
-            try:
-                await asyncio.wait_for(asyncio.shield(event_fut), timeout=poll_interval)
-                log.info("Event response: %d chars", len(event_fut.result()))
-                return event_fut.result()
-            except asyncio.TimeoutError:
-                pass
-            try:
-                fresh = await client.get_messages(poll_entity, ids=sent_id)
-                if fresh and fresh.text and fresh.text != command:
-                    log.info("Poll response: %d chars", len(fresh.text))
-                    return fresh.text
-            except Exception as poll_err:
-                if _is_transient(poll_err) and not _poll_reconnected:
-                    _poll_reconnected = True
-                    log.warning("Poll hit transient error, reconnecting: %s", poll_err)
-                    await _reset_client()
-                    # _reset_client() replaced the module-level client; refresh
-                    # the local reference and re-register the edit handler on
-                    # the new connection (the old one is dead).
-                    client.remove_event_handler(_on_edit)
-                    client = _client
-                    client.add_event_handler(_on_edit, events.MessageEdited)
-                # Non-transient or already reconnected: keep polling locally,
-                # the event handler may still deliver the response.
-    finally:
-        client.remove_event_handler(_on_edit)
-
-    return "(no response)"
-
-
-async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.0) -> str:
-    """Send a command and return the *final* text once successive edits settle.
-
-    Some commands (e.g. ``.restart -f``) edit the same message several times:
-    "restarting...", then "started without modules", then "fully restarted".
-    ``send_command`` returns on the first edit; this one keeps tracking the
-    message until no new edit arrives for ``quiet`` seconds (or ``wait``
-    elapses) and returns the last text. Returns "" on timeout.
-
-    Args:
-        command: The command string to send.
-        wait: Overall deadline in seconds.
-        quiet: Consider the message settled after this many seconds without a new edit.
+        The final response text, or "" on timeout (``_execute`` maps it to a
+        human-readable "(no response)").
     """
     client = await get_client()
     entity = await _resolve_entity()
@@ -565,7 +493,8 @@ async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.
     try:
         sent = await client.send_message(target, command, **kwargs)
         sent_id = sent.id
-        log.info("Sent command: %s (msg_id=%d, tracking edits)", command, sent_id)
+        log.info("Sent command: %s (msg_id=%d, chat=%s, topic=%s)",
+                 command, sent_id, settings.her_chat_id, topic)
 
         deadline = loop.time() + wait
         poll_interval = 0.25
@@ -587,11 +516,14 @@ async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.
                     _poll_reconnected = True
                     log.warning("Poll hit transient error, reconnecting: %s", poll_err)
                     await _reset_client()
+                    # _reset_client() replaced the module-level client; refresh
+                    # the local reference and re-register the edit handler on
+                    # the new connection (the old one is dead).
                     client.remove_event_handler(_on_edit)
                     client = _client
                     client.add_event_handler(_on_edit, events.MessageEdited)
-                # Non-transient or already reconnected: keep polling, edits
-                # may still arrive via the event handler.
+                # Non-transient or already reconnected: keep polling locally,
+                # the event handler may still deliver the response.
 
             # No new edit within `quiet` seconds — the message has settled.
             if last_text and last_edit_at is not None and loop.time() - last_edit_at >= quiet:
@@ -600,6 +532,21 @@ async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.
         client.remove_event_handler(_on_edit)
 
     return last_text
+
+
+async def send_command_final(command: str, wait: float = 30.0, quiet: float = 5.0) -> str:
+    """Send a command and return the *final* text once successive edits settle.
+
+    Thin alias over :func:`send_command`, which now always settles: kept for
+    readability at call sites (e.g. ``.restart -f``) that need generous
+    ``wait``/``quiet`` budgets spread over a long boot.
+
+    Args:
+        command: The command string to send.
+        wait: Overall deadline in seconds.
+        quiet: Consider the message settled after this many seconds without a new edit.
+    """
+    return await send_command(command, wait=wait, quiet=quiet)
 
 
 async def ensure_watcher() -> None:

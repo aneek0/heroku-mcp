@@ -87,7 +87,13 @@ def _parse_help(text: str) -> list[dict]:
     return modules
 
 
-async def _execute(cmd: str, wait: float = 5.0) -> str:
+async def _execute(cmd: str, wait: float = 10.0) -> str:
+    """Run a userbot command and return its final text.
+
+    ``send_command`` settles on the last edit: typical latency is
+    (command runtime) + ~2 s of quiet, ``wait`` is only the emergency
+    ceiling for a hung command.
+    """
     return await send_command(cmd, wait=wait)
 
 
@@ -147,19 +153,38 @@ class Guard:
 
 
 @mcp.tool()
-async def load_module(name: str, code: str) -> str:
-    """Save a Python module, serve it via HTTP, and send .dlm to Heroku. Also works to update an already-loaded module without unloading it first."""
+async def load_module(name: str, code: str | None = None) -> str:
+    """Load (or update) a module on Heroku by serving it over HTTP and sending .dlm.
+
+    Module files live in the ``modules/`` folder on the MCP-server host; the
+    local module store serves them and the userbot downloads from that URL.
+
+    With ``code``: saves the text to ``modules/<name>.py`` (overwrites) and
+    loads it. Without ``code``: re-sends ``.dlm`` for the existing file, so
+    the module may be edited in place first. The returned text is the final
+    userbot answer (loaded / failed + traceback), not the intermediate
+    "installing..." stage.
+    """
     path = settings.modules_path / f"{name}.py"
-    path.write_text(code, encoding="utf-8")
-    log.info("Saved module %s (%d bytes)", name, len(code))
+    if code is None:
+        if not path.is_file():
+            return (
+                f"❌ module '{name}' not found in {settings.modules_path} — "
+                "pass code= to create it, or edit the existing file first"
+            )
+        log.info("Reloading existing module %s from %s", name, path)
+    else:
+        path.write_text(code, encoding="utf-8")
+        log.info("Saved module %s (%d bytes)", name, len(code))
 
     await start_http()
 
     port = get_bound_port() or (settings.server_port + 1)
     url = settings.module_url(name, port)
     log.info("Serving module %s to the userbot at %s", name, url)
-    response = await _execute(f".dlm {url}", wait=8.0)
-    return response
+    # .dlm edits twice ("installing..." then the result); default quiet=2 s
+    # returns the final stage. wait=25 is just the hang ceiling.
+    return await send_command(f".dlm {url}", wait=25.0)
 
 
 @mcp.tool()
@@ -208,15 +233,19 @@ async def restart_userbot(verify: bool = True) -> str:
 
 
 @mcp.tool()
-async def send_command_tool(cmd: str, wait: float = 5.0) -> str:
-    """Send a raw command to the Heroku userbot."""
+async def send_command_tool(cmd: str, wait: float = 10.0, quiet: float = 2.0) -> str:
+    """Send a raw command to the Heroku userbot.
+
+    Returns the final answer: edits are tracked until ``quiet`` seconds pass
+    without a new one. ``wait`` is only the overall ceiling.
+    """
     # Security: block destructive commands
     stripped = cmd.strip()
     for prefix, pfx_space in zip(BLOCKED_COMMANDS, _BLOCKED_PREFIXES):
         if stripped == prefix or stripped.startswith(pfx_space):
             return f"🚫 BLOCKED: command '{prefix}' is not allowed via MCP"
 
-    response = await send_command(cmd, wait=wait)
+    response = await send_command(cmd, wait=wait, quiet=quiet)
     return response
 
 
