@@ -219,6 +219,49 @@ class ExecuteTest(unittest.TestCase):
         self.assertEqual(result, "r")
         self.assertEqual(sc.call_args.kwargs, {"wait": 12.0})
 
+    def test_execute_maps_empty_settle_to_no_response(self):
+        # send_command returns "" on a timeout; restart verification compares
+        # against this exact string, so an empty result must never look like
+        # a live userbot.
+        with mock.patch("heroku_mcp.server.send_command",
+                        mock.AsyncMock(return_value="")):
+            result = _run(_execute(".help", wait=6.0))
+        self.assertEqual(result, "(no response)")
+
+    def test_send_command_tool_maps_empty_settle(self):
+        from heroku_mcp.server import send_command_tool
+        with mock.patch("heroku_mcp.server.send_command",
+                        mock.AsyncMock(return_value="")):
+            result = _run(send_command_tool(".x"))
+        self.assertEqual(result, "(no response)")
+
+    def test_load_module_reports_missing_response(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "demo.py").write_text("x\n", encoding="utf-8")
+
+            async def fake_start_http():
+                pass
+
+            with (
+                mock.patch.object(
+                    type(telegram.settings), "modules_path",
+                    new=mock.PropertyMock(return_value=tmp_path),
+                ),
+                mock.patch("heroku_mcp.server.start_http", fake_start_http),
+                mock.patch("heroku_mcp.server.get_bound_port", return_value=6768),
+                mock.patch.object(
+                    type(telegram.settings), "module_url",
+                    lambda self, name, port: f"http://store/{name}.py",
+                ),
+                mock.patch("heroku_mcp.server.send_command",
+                           mock.AsyncMock(return_value="")),
+            ):
+                result = _run(load_module("demo"))
+            self.assertIn("no response", result)
+
 
 if __name__ == "__main__":
     unittest.main()

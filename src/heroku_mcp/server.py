@@ -92,9 +92,10 @@ async def _execute(cmd: str, wait: float = 10.0) -> str:
 
     ``send_command`` settles on the last edit: typical latency is
     (command runtime) + ~2 s of quiet, ``wait`` is only the emergency
-    ceiling for a hung command.
+    ceiling for a hung command. Returns "(no response)" when the userbot
+    never edited the message.
     """
-    return await send_command(cmd, wait=wait)
+    return await send_command(cmd, wait=wait) or "(no response)"
 
 
 # MCP session ids are bearer-equivalent (each carries a live Telegram-backed
@@ -184,7 +185,8 @@ async def load_module(name: str, code: str | None = None) -> str:
     log.info("Serving module %s to the userbot at %s", name, url)
     # .dlm edits twice ("installing..." then the result); default quiet=2 s
     # returns the final stage. wait=25 is just the hang ceiling.
-    return await send_command(f".dlm {url}", wait=25.0)
+    response = await send_command(f".dlm {url}", wait=25.0)
+    return response or "(no response — userbot never reported the module result)"
 
 
 @mcp.tool()
@@ -246,7 +248,7 @@ async def send_command_tool(cmd: str, wait: float = 10.0, quiet: float = 2.0) ->
             return f"🚫 BLOCKED: command '{prefix}' is not allowed via MCP"
 
     response = await send_command(cmd, wait=wait, quiet=quiet)
-    return response
+    return response or "(no response)"
 
 
 def _topic_filter(msg) -> bool:
