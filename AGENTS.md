@@ -63,6 +63,23 @@ event handler or poll fallback (`get_messages`).
 - stdio-only clients (jcode) reach a remote server through `npx mcp-remote` with `--header
   "Authorization: Bearer ${TOKEN}"` and `--allow-http` for plain HTTP
 
+## Module workflow (load_module)
+
+- Source of truth: `.py` files in the `modules/` folder on the MCP-server host
+  (`modules_dir`). The module store serves them raw; the userbot downloads
+  from `module_url(name, port)` and registers them via `.dlm`.
+- `load_module(name, code=…)` writes `modules/<name>.py` and sends `.dlm`.
+  `load_module(name)` without `code` re-sends `.dlm` for the existing file
+  (edit the file in place first, then call it to reload).
+- `send_command` tracks edits until `quiet` seconds (default 2) pass without
+  a new one and returns the last text: `.dlm` returns the final load result,
+  not the intermediate "installing…" stage. `wait` is only the hang ceiling.
+- Loading takes ~1-3 s on the userbot side; expect the tool to answer in
+  ~3-5 s total. No hash checks: the module store serves exactly what was
+  written. External sources (raw GitHub) may serve CDN-cached code for up to
+  ~5 min after a push, and server-side clones may be behind origin — prefer
+  the modules folder over remote URLs.
+
 ## Tests
 
 Offline unit tests (no network):
