@@ -1,3 +1,7 @@
+# Runtime dependencies mirror pyproject.toml [project].dependencies.
+# For editable install: pip install -r requirements.txt
+# (the package itself declares the same pins; keep both lists in sync
+# or install via `pip install -e .` / `uv sync` only).
 -e .
 mcp>=1.0.0
 telethon>=1.44.0

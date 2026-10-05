@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "heroku-mcp"
 version = "0.1.0"
 description = "MCP server for managing Heroku Telegram userbot"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "telethon>=1.44.0",
