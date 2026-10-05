@@ -14,7 +14,7 @@ MCP server for managing a Heroku Telegram userbot.
 ```bash
 pip install -e .
 python generate_session.py --phone +<number>   # create Telegram session (honors proxy)
-cp config.example.yaml config.yaml
+cp config.yaml.example config.yaml
 # edit config.yaml with your api_id, api_hash, proxy
 python -m heroku_mcp.server                    # streamable HTTP on 127.0.0.1:6767
 ```
@@ -151,6 +151,18 @@ heroku_mcp:
 a URL the userbot can fetch, `load_module` cannot work — the other tools
 (commands, evaluate, restart, history) are unaffected.
 
+The module store serves raw sources with **no authentication**: anyone who can
+reach it can read your module code. It binds `server_port + 1` and follows
+`server_host` unless `module_host` is set. Ways to keep it closed:
+
+- Loopback bind (`module_host: 127.0.0.1`) + port forward/SSH tunnel to the
+  userbot's side — nothing is published.
+- `module_base_url` behind a reverse proxy that terminates TLS and enforces
+  its own auth (basic auth, client certs, IP allowlist), and a local
+  `module_host` — the store stays on the box, the proxy gates access.
+
+When the store is reachable off-box, the server logs a warning at startup.
+
 If the MCP server reports "Telegram session is not authorized", (re)run
 `generate_session.py` — it works through the proxy from config.yaml and
 refuses to start if a server instance is holding the session lock (stop
@@ -178,6 +190,8 @@ Config via `config.yaml` or environment variables with `HEROKU_MCP_` prefix:
 | `her_topic_id` | `HEROKU_MCP_HER_TOPIC_ID` | `0` | Forum topic ID within `her_chat_id` (0 = disabled) |
 | `restart_boot_wait` | `HEROKU_MCP_RESTART_BOOT_WAIT` | `30` | Seconds to wait for the userbot to boot before verification after `.restart -f` |
 | `proxy` | `HEROKU_MCP_PROXY` | — | Proxy for Telegram connection. Empty/absent = direct connection |
+| `proxy_list_url` | `HEROKU_MCP_PROXY_LIST_URL` | — | URL of a text file with proxies (one link per line) for a failover pool |
+| `proxy_check_timeout` | `HEROKU_MCP_PROXY_CHECK_TIMEOUT` | `10.0` | Per-candidate MTProto handshake timeout for the pool, seconds |
 
 ### Proxy
 
@@ -196,6 +210,29 @@ heroku_mcp:
 The env var `HEROKU_MCP_PROXY` overrides the YAML value. An invalid `proxy` value
 aborts startup instead of silently falling back to a direct connection.
 `generate_session.py` uses the same proxy setting.
+
+### Proxy pool (failover)
+
+`proxy_list_url` points to a plain-text file (local path or URL) with one proxy
+link per line. On connect the server tries candidates in turn — the `proxy`
+value first, then the list entries — and uses the first one that completes the
+MTProto handshake; dead candidates are skipped. If every candidate fails, the
+list is re-fetched on the next reconnect.
+
+```yaml
+heroku_mcp:
+  proxy: "tg://proxy?server=203.0.113.1&port=1443&secret=dd00112233..."
+  proxy_list_url: "https://example.org/proxies.txt"
+  proxy_check_timeout: 10.0
+```
+
+To health-check a candidate list without connecting the server, use the
+bundled CLI (TCP connect + MTProto handshake, up to 4 proxies concurrently;
+exit code 0 when at least one works, prints a ranking):
+
+```bash
+.venv/bin/python check_proxies.py https://example.org/proxies.txt [--timeout 10]
+```
 
 ## MCP Tools
 
@@ -218,3 +255,15 @@ Commands are sent inside the topic (via `reply_to`), and `get_history` only
 shows messages from that topic. Alternatively set `her_topic_id` separately
 (explicit value wins over a link). `switch_chat` changes the target at
 runtime without a restart.
+
+## Development
+
+The test suite is fully offline (no network, no Telegram session):
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+## License
+
+[MIT](LICENSE)

@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-.venv/
 .env
 config.yaml
 *.pid
