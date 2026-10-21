@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-_text_node_type = Any
 
 
 def _text(node: Any) -> str:
