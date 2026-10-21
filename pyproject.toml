@@ -10,7 +10,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "telethon>=1.44.0",
+    "telethon>=1.45.0",
     "mcp>=1.0.0,<2",
     "aiohttp>=3.9.0",
     "pydantic-settings>=2.0.0",
