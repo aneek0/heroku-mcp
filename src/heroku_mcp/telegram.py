@@ -542,6 +542,10 @@ async def send_command(command: str, wait: float = 30.0, quiet: float = 2.0) -> 
                  command, sent_id, settings.her_chat_id, topic)
 
         deadline = loop.time() + wait
+        # GetRepliesRequest (the topic poll) is flood-limited: a few calls buy
+        # a ~12 s sleep. The event handler delivers the common case instantly,
+        # so the poll is only a fallback on a slow cadence.
+        next_poll = 0.0
         while loop.time() < deadline:
             try:
                 await asyncio.wait_for(asyncio.shield(settled_fut), timeout=0.5)
@@ -549,6 +553,9 @@ async def send_command(command: str, wait: float = 30.0, quiet: float = 2.0) -> 
                 continue
             except asyncio.TimeoutError:
                 pass
+            if loop.time() < next_poll:
+                continue
+            next_poll = loop.time() + 3.0
             try:
                 fresh = await client.get_messages(poll_entity, **poll_kwargs)
                 for msg in reversed(fresh or []):
