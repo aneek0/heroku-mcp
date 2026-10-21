@@ -80,6 +80,21 @@ event handler or poll fallback (`get_messages`).
   ~5 min after a push, and server-side clones may be behind origin — prefer
   the modules folder over remote URLs.
 
+## Answers (rich messages)
+
+- Since 2026-10 the userbot replies through an **inline bot** with a *new*
+  message: `Message.text` is empty, content is in `Message.rich_message`.
+  Render it with `heroku_mcp.rich.message_text()`; never read `.text` directly.
+- `send_command` watches new messages with `id >= sent_id`, `out=True`, in the
+  configured topic, plus in-place edits. It settles on the last text with an
+  alphanumeric char, so the `🪐` ack cannot close the window early.
+- Poll is a fallback at a 3 s cadence: topic polls use `GetRepliesRequest`,
+  which flood-waits ~12 s after a few rapid calls.
+- `telethon>=1.45` is required: 1.44 cannot deserialize `ReplyInlineMarkup`
+  or the new `User` constructor and its update loop dies.
+- Parser contract lives in `tests/fixtures/*.json` (raw `RichMessage` captured
+  from the live Logs topic); re-capture when the userbot changes its rendering.
+
 ## Tests
 
 Offline unit tests (no network):

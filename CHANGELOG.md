@@ -3,6 +3,35 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- Userbot answers are new **rich messages** (inline bot, 2026-10): the reply
+  has an empty `text` and a `RichMessage` payload, so edit-tracking returned
+  the `🪐` ack or nothing. `send_command` now watches new messages in the
+  target topic, renders rich content to text (`heroku_mcp.rich`), and settles
+  only on content-bearing text. `get_history`/`get_history_json` use the same
+  renderer.
+- Topic polling no longer hammers `GetRepliesRequest`: polls run every 3 s
+  (a 0.5 s cadence earned ~12 s flood waits); events deliver the usual case.
+- `load_module`/`unload_module` and the module store reject names containing
+  `/` or `..`, so a module name cannot write or read outside `modules/`.
+- `.help` parsing accepts the 2026-10 listing format (`🛑 Module: ( cmd | … )`).
+
+### Changed
+- `telethon>=1.45`: 1.44 cannot deserialize `ReplyInlineMarkup` / the new
+  `User` constructor and its update loop dies with `TypeNotFoundError`.
+- `send_command`/`send_command_tool`/`_execute` default `wait` raised to 30 s:
+  the inline-bot answer can take 10-20 s.
+- `get_history` fetches exactly `limit` topic messages instead of `limit * 3`.
+- `requirements.txt` removed; `pyproject.toml` + `uv.lock` are authoritative.
+
+### Added
+- `GLOSSARY.md`, `docs/adr/0001-command-channel.md`,
+  `docs/adr/0002-rich-answer-parsing.md`.
+- Golden fixtures captured from the live topic (`tests/fixtures/*.json`) and
+  module-name guard tests (94 offline tests total).
+
 ## [0.1.0] — 2026-09-16
 
 First tagged release. Core: MCP server managing a Heroku Telegram userbot

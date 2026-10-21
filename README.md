@@ -9,6 +9,12 @@ MCP server for managing a Heroku Telegram userbot.
 - Send arbitrary commands to the userbot
 - Retrieve recent messages from the target chat for diagnostics
 
+Since 2026-10 the userbot answers through an inline bot with **rich messages**
+(empty `Message.text`, content in `Message.rich_message`). `send_command`
+watches new messages in the target topic and renders that payload to text
+(`heroku_mcp.rich`), settling on the last content-bearing answer — see
+`docs/adr/0002-rich-answer-parsing.md`. This requires `telethon>=1.45`.
+
 ## Setup
 
 ```bash
