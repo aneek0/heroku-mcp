@@ -1,0 +1,1056 @@
+{
+ "text": "",
+ "entities": [],
+ "via_bot_id": 7785734702,
+ "rich_message": {
+  "_": "RichMessage",
+  "blocks": [
+   {
+    "_": "PageBlockParagraph",
+    "text": {
+     "_": "TextConcat",
+     "texts": [
+      {
+       "_": "TextPlain",
+       "text": "🌘"
+      },
+      {
+       "_": "TextPlain",
+       "text": " "
+      },
+      {
+       "_": "TextBold",
+       "text": {
+        "_": "TextPlain",
+        "text": "39 модулей доступно, 0 скрыто:"
+       }
+      }
+     ]
+    }
+   },
+   {
+    "_": "PageBlockDetails",
+    "blocks": [
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "APILimiter"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( api_fw_protection | suspend_api_protect )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Evaluator"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( e | ec | ecpp | eg | enode | ers )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Help"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( help | helphide | support )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuAccounts"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( addacc | switchacc )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuBackup"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( backupall | backupdb | backupmods | restoreall | restoredb | restoremods | set_backup_period )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuConfig"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( config )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuInfo"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( info | ubinfo )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuSecurity"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( delsgroup | inlinesec | newsgroup | owneradd | ownerlist | ownerrm | querysec | security | sgroup | sgroupadd | sgroupdel | sgroups | tsec | tsecclr | tsecrm )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "HerokuSettings"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( nonickchat | nonickchats | nonickcmd | nonickcmds | nonickuser | nonickusers | settings | watcherbl | watcher | watchers )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "InlineStuff"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( ch_bot_token | ch_heroku_bot )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Loader"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( addrepo | clearmodules | delrepo | dlmall | dlmod | loadmod | ml | unloadmod )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Settings"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( addalias | aliases | blacklist | blacklistuser | cleardb | clearmodule | delalias | heroku | installation | setprefix | togglecmd | togglemod | unblacklist | unblacklistuser )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Terminal"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( terminal | terminate | 🤖 exec )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Tester"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( clearlogs | logs | ping | suspend )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Translations"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( dllangpack | setlang )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Translator"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( tr )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Updater"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( autoupdate | changelog | restart | rollback | source | ubstop | update )"
+        }
+       ]
+      }
+     }
+    ],
+    "title": {
+     "_": "TextPlain",
+     "text": "Встроенные модули"
+    },
+    "open": false
+   },
+   {
+    "_": "PageBlockDetails",
+    "blocks": [
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "AzuAI"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( aicfg | ask | chat | clearchat )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "base64"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( b64d | b64e )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "CheburCheck"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( rkn | rknp )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Fastfetch"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( fastfetch )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "FHeta"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( fheta | 🤖 fheta )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "FileHash"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( hash )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "FileUploadMod"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( upload )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "FindAnime"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( findanime )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "GitUploader"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( gitadd )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "IpChecker"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( bs | bsl | sn | vpn | wh )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Limoka"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( limoka | limokaupdate | lshistory | updateindex )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "LoliHentai"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( lolic | loli )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "QRtools"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( makeqr | readqr )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Renamer"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( rename )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Rp"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( rp | st )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "SpeedTest"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( speedtest )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Uploader"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( aneeko | catbox | kappa | litter | rup )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Valutator"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( curr )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "Webtofile"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( wtf )"
+        }
+       ]
+      }
+     },
+     {
+      "_": "PageBlockParagraph",
+      "text": {
+       "_": "TextConcat",
+       "texts": [
+        {
+         "_": "TextPlain",
+         "text": "🛑"
+        },
+        {
+         "_": "TextPlain",
+         "text": " "
+        },
+        {
+         "_": "TextFixed",
+         "text": {
+          "_": "TextPlain",
+          "text": "yg_ocr"
+         }
+        },
+        {
+         "_": "TextPlain",
+         "text": ": ( ocr | trocr )"
+        }
+       ]
+      }
+     }
+    ],
+    "title": {
+     "_": "TextPlain",
+     "text": "Модули"
+    },
+    "open": false
+   }
+  ],
+  "photos": [],
+  "documents": [],
+  "rtl": false,
+  "part": false
+ }
+}

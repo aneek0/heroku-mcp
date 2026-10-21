@@ -15,6 +15,7 @@ from telethon.errors import RPCError
 
 from .config import settings
 from .proxy import parse_proxy, parse_proxy_list, proxy_description
+from .rich import message_text
 
 log = logging.getLogger(__name__)
 
@@ -431,22 +432,54 @@ async def set_target_chat(chat: Union[str, int], topic: int = 0) -> str:
     return f"Commands will now be sent to: {where}{topic_str}"
 
 
-async def send_command(command: str, wait: float = 15.0, quiet: float = 2.0) -> str:
-    """Send a command to the configured chat and return the *final* response.
+def _peer_chat_id(entity) -> int | None:
+    """Telethon's marked chat id for an entity (channels carry the -100 prefix)."""
+    from telethon.tl import types as tg_types
 
-    The Heroku userbot typically *edits* the sent message with the result, and
-    some commands edit the same message several times (e.g. ``.dlm`` prints
-    "installing..." first and the load result a second later). To avoid
-    returning an intermediate stage, this tracks edits until no new edit
-    arrives for ``quiet`` seconds and returns the last text.
+    ident = getattr(entity, "id", None)
+    if ident is None:
+        return None
+    if isinstance(entity, tg_types.Channel):
+        return int(f"-100{ident}")
+    if isinstance(entity, tg_types.Chat):
+        return -ident
+    return ident
 
-    Typical latency is (command runtime) + ``quiet``; ``wait`` is only an
-    emergency ceiling for a hung command, not the expected duration.
+
+def _has_content(text: str) -> bool:
+    """True when text is more than a progress emoji (the userbot acks with 🪐)."""
+    return any(ch.isalnum() for ch in text)
+
+
+def _in_topic(msg, topic: int) -> bool:
+    """True when msg belongs to the forum topic (or carries no reply header)."""
+    reply = getattr(msg, "reply_to", None)
+    if reply is None:
+        return True
+    return topic in (
+        getattr(reply, "reply_to_msg_id", None),
+        getattr(reply, "reply_to_top_id", None),
+    )
+
+
+async def send_command(command: str, wait: float = 30.0, quiet: float = 2.0) -> str:
+    """Send a command to the configured chat and return the *final* answer.
+
+    Since 2026-10 the userbot answers through an inline bot: the result is a
+    *new* rich message (``Message.text`` is empty, ``rich_message`` holds the
+    content), usually 1-20 s after the command. Older handlers still edit the
+    sent message (``.dlm`` prints "installing..." then the load result), so
+    both new messages and in-place edits are watched.
+
+    Settling: the last content-bearing text wins; an emoji ack (🪐) does not
+    close the window while ``wait`` still has budget. ``wait`` is only the
+    ceiling for a hung command, not the expected duration.
 
     Args:
         command: The command string (e.g. '.help', '.e 1+1').
         wait: Max seconds to wait overall.
-        quiet: Consider the message settled after this many seconds without a new edit.
+        quiet: Consider the answer settled after this many seconds without a
+            newer one.
 
     Returns:
         The final response text, or "" on timeout (``_execute`` maps it to a
@@ -458,78 +491,97 @@ async def send_command(command: str, wait: float = 15.0, quiet: float = 2.0) -> 
 
     me = await client.get_me() if entity is None else None
     target = entity or me
-    kwargs = {}
-    if topic:
-        kwargs["reply_to"] = topic
+    kwargs = {"reply_to": topic} if topic else {}
 
-    target_id = getattr(target, "id", None)
+    target_id = _peer_chat_id(target)
     loop = asyncio.get_running_loop()
 
-    edit_fut: asyncio.Future = loop.create_future()
-    sent_id = None
+    settled_fut: asyncio.Future = loop.create_future()
+    sent_id: int | None = None
     last_text = ""
-    last_edit_at: float | None = None
+    last_at: float | None = None
     seen_texts: set[str] = set()
 
     def _accept(text: str) -> None:
-        nonlocal last_text
+        nonlocal last_text, last_at
         # Monotonic: every distinct text is a new stage; a poll returning an
         # older stage text must not regress the state machine.
-        if text and text != command and text != last_text and text not in seen_texts and not edit_fut.done():
-            seen_texts.add(text)
-            last_text = text
-            edit_fut.set_result(text)
+        if not text or text == command or text in seen_texts or settled_fut.done():
+            return
+        seen_texts.add(text)
+        last_text = text
+        last_at = loop.time()
+        settled_fut.set_result(text)
 
-    @client.on(events.MessageEdited)
-    async def _on_edit(event):
-        if sent_id is not None and event.message.id != sent_id:
-            return
+    def _in_scope(event) -> bool:
+        if not getattr(event.message, "out", False):
+            return False  # another chat member, not the userbot
+        if sent_id is None or event.message.id < sent_id:
+            return False  # stale message, or one from before the send
         if target_id is not None and event.chat_id != target_id:
-            return
-        _accept(event.message.text or "")
+            return False
+        return topic is None or _in_topic(event.message, topic)
+
+    async def _on_answer(event):
+        if _in_scope(event):
+            _accept(message_text(event.message))
 
     poll_entity = entity or me
+    poll_kwargs = {"limit": 10, "min_id": 0}
+    if topic:
+        poll_kwargs["reply_to"] = topic
     _poll_reconnected = False
+    observers = (events.NewMessage, events.MessageEdited)
+    for ev in observers:
+        client.add_event_handler(_on_answer, ev)
     try:
         sent = await client.send_message(target, command, **kwargs)
         sent_id = sent.id
+        poll_kwargs["min_id"] = sent_id
         log.info("Sent command: %s (msg_id=%d, chat=%s, topic=%s)",
                  command, sent_id, settings.her_chat_id, topic)
 
         deadline = loop.time() + wait
-        poll_interval = 0.25
         while loop.time() < deadline:
             try:
-                text = await asyncio.wait_for(asyncio.shield(edit_fut), timeout=poll_interval)
-                log.info("Edit received: %d chars", len(text))
-                edit_fut = loop.create_future()
-                last_edit_at = loop.time()
+                await asyncio.wait_for(asyncio.shield(settled_fut), timeout=0.5)
+                settled_fut = loop.create_future()
                 continue
             except asyncio.TimeoutError:
                 pass
             try:
-                fresh = await client.get_messages(poll_entity, ids=sent_id)
-                if fresh and fresh.text:
-                    _accept(fresh.text)
+                fresh = await client.get_messages(poll_entity, **poll_kwargs)
+                for msg in reversed(fresh or []):
+                    if msg and getattr(msg, "out", False):
+                        _accept(message_text(msg))
+                # The command itself may be edited in place instead.
+                sent_msg = await client.get_messages(poll_entity, ids=sent_id)
+                if sent_msg is not None and sent_msg.id == sent_id:
+                    _accept(message_text(sent_msg))
             except Exception as poll_err:
                 if _is_transient(poll_err) and not _poll_reconnected:
                     _poll_reconnected = True
                     log.warning("Poll hit transient error, reconnecting: %s", poll_err)
                     await _reset_client()
                     # _reset_client() replaced the module-level client; refresh
-                    # the local reference and re-register the edit handler on
-                    # the new connection (the old one is dead).
-                    client.remove_event_handler(_on_edit)
+                    # the local reference and re-register the handlers on the
+                    # new connection (the old one is dead).
+                    for ev in observers:
+                        client.remove_event_handler(_on_answer, ev)
                     client = _client
-                    client.add_event_handler(_on_edit, events.MessageEdited)
+                    for ev in observers:
+                        client.add_event_handler(_on_answer, ev)
                 # Non-transient or already reconnected: keep polling locally,
                 # the event handler may still deliver the response.
 
-            # No new edit within `quiet` seconds — the message has settled.
-            if last_text and last_edit_at is not None and loop.time() - last_edit_at >= quiet:
+            # Settle only on real content: the 🪐 ack must not close the window
+            # before the rich answer arrives.
+            if (last_text and _has_content(last_text) and last_at is not None
+                    and loop.time() - last_at >= quiet):
                 break
     finally:
-        client.remove_event_handler(_on_edit)
+        for ev in observers:
+            client.remove_event_handler(_on_answer, ev)
 
     return last_text
 

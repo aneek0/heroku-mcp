@@ -28,6 +28,8 @@ class _FakeMsg:
     def __init__(self, id=1, text=""):
         self.id = id
         self.text = text
+        # The userbot replies from its own account: everything it sends is out=True.
+        self.out = True
 
 
 class _FakeClient:
@@ -60,13 +62,16 @@ class _FakeClient:
     async def send_message(self, target, text, **kwargs):
         return _FakeMsg(id=7, text=text)
 
-    async def get_messages(self, entity, ids=None, limit=None):
+    async def get_messages(self, entity, ids=None, limit=None, min_id=None, reply_to=None):
+        if ids is not None:
+            # ids= fetch: the sent command itself (its edited text is staged too).
+            return _FakeMsg(id=ids, text=None)
         if self._stages:
             gap = self._gaps.pop(0) if self._gaps else 0
             if gap:
                 await asyncio.sleep(gap)
-            return _FakeMsg(id=7, text=self._stages.pop(0))
-        return _FakeMsg(id=7, text=None)
+            return [_FakeMsg(id=7, text=self._stages.pop(0))]
+        return []
 
 
 def _patch_telegram(client):

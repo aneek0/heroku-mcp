@@ -1,20 +1,24 @@
 """AIOHTTP server that serves module .py files for .dlm loading."""
 
-from __future__ import annotations
-
 import logging
+import re
+
 from aiohttp import web
 
 from .config import settings
 
 log = logging.getLogger(__name__)
 
+# Same guard as server.load_module: names stay inside modules/.
+_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 _runner: web.AppRunner | None = None
 _bound_port: int | None = None
 
 
 async def _handle_module(request: web.Request) -> web.Response:
     name = request.match_info["name"]
+    if not _NAME_RE.match(name):
+        raise web.HTTPNotFound(text="Invalid module name")
     path = settings.modules_path / f"{name}.py"
     if not path.is_file():
         raise web.HTTPNotFound(text=f"Module {name} not found")

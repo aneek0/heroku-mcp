@@ -25,6 +25,7 @@ from .telegram import (
     _call_with_recovery,
     _resolve_entity,
 )
+from .rich import rich_to_text, message_text
 
 log = logging.getLogger("heroku_mcp")
 
@@ -70,15 +71,15 @@ mcp = FastMCP(
 )
 
 
-_rx_clean = re.compile(r"[`▪️▸▹◆►▶★]")
-_rx_spaces = re.compile(r"\s{2,}")
-_rx_line = re.compile(r"^(\w+):\s*\((.+)\)\s*$")
+_rx_line = re.compile(r"^[^\w]*([\w🤖]+):\s*\((.+)\)\s*$")
+_MODULE_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 
 
 def _parse_help(text: str) -> list[dict]:
+    """Parse the `.help` listing: '🛑 Name: ( cmd | cmd )' lines, 2026-10 format."""
     modules = []
     for line in text.splitlines():
-        line = _rx_spaces.sub(" ", _rx_clean.sub("", line)).strip()
+        line = line.strip()
         if not line:
             continue
         m = _rx_line.match(line)
@@ -166,6 +167,11 @@ async def load_module(name: str, code: str | None = None) -> str:
     userbot answer (loaded / failed + traceback), not the intermediate
     "installing..." stage.
     """
+    if not _MODULE_NAME_RE.match(name):
+        return (
+            f"❌ invalid module name '{name}' — use letters, digits, '_', '.', '-' "
+            "(no slashes: modules stay inside modules/)"
+        )
     path = settings.modules_path / f"{name}.py"
     if code is None:
         if not path.is_file():
@@ -273,17 +279,16 @@ async def get_history(limit: int = 20) -> str:
     entity = await _resolve_entity()
     target = entity or await client.get_me()
     messages = await _call_with_recovery(
-        lambda: client.get_messages(target, limit=max(limit * 3, limit))
+        lambda: client.get_messages(target, limit=limit, reply_to=settings.her_topic_id or None)
     )
     lines = []
     for msg in reversed(messages):
-        if not msg or not msg.text or not _topic_filter(msg):
+        text = message_text(msg) if msg else ""
+        if not text or not _topic_filter(msg):
             continue
         date_str = msg.date.isoformat() if msg.date else "?"
         lines.append(f"--- #{msg.id} ({date_str}) ---")
-        lines.append(msg.text[:500])
-        if len([l for l in lines if l.startswith("--- #")]) >= limit:
-            break
+        lines.append(text[:500])
     return "\n".join(lines)
 
 
@@ -294,19 +299,18 @@ async def get_history_json(limit: int = 20) -> str:
     entity = await _resolve_entity()
     target = entity or await client.get_me()
     messages = await _call_with_recovery(
-        lambda: client.get_messages(target, limit=max(limit * 3, limit))
+        lambda: client.get_messages(target, limit=limit, reply_to=settings.her_topic_id or None)
     )
     result = []
     for msg in reversed(messages):
-        if not msg or not msg.text or not _topic_filter(msg):
+        text = message_text(msg) if msg else ""
+        if not text or not _topic_filter(msg):
             continue
         result.append({
             "id": msg.id,
-            "text": msg.text[:500],
+            "text": text[:500],
             "date": msg.date.isoformat() if msg.date else None,
         })
-        if len(result) >= limit:
-            break
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 

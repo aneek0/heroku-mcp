@@ -1,0 +1,73 @@
+{
+ "text": "",
+ "entities": [],
+ "via_bot_id": 7785734702,
+ "rich_message": {
+  "_": "RichMessage",
+  "blocks": [
+   {
+    "_": "PageBlockParagraph",
+    "text": {
+     "_": "TextConcat",
+     "texts": [
+      {
+       "_": "TextPlain",
+       "text": "⚡️"
+      },
+      {
+       "_": "TextPlain",
+       "text": " "
+      },
+      {
+       "_": "TextBold",
+       "text": {
+        "_": "TextPlain",
+        "text": "𝙿𝚒𝚗𝚐: "
+       }
+      },
+      {
+       "_": "TextFixed",
+       "text": {
+        "_": "TextPlain",
+        "text": "66.833"
+       }
+      },
+      {
+       "_": "TextBold",
+       "text": {
+        "_": "TextPlain",
+        "text": " 𝚖𝚜 "
+       }
+      },
+      {
+       "_": "TextPlain",
+       "text": "\n"
+      },
+      {
+       "_": "TextPlain",
+       "text": "🕓"
+      },
+      {
+       "_": "TextBold",
+       "text": {
+        "_": "TextPlain",
+        "text": " 𝚄𝚙𝚝𝚒𝚖𝚎: "
+       }
+      },
+      {
+       "_": "TextFixed",
+       "text": {
+        "_": "TextPlain",
+        "text": "0:00:28"
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "photos": [],
+  "documents": [],
+  "rtl": false,
+  "part": false
+ }
+}
