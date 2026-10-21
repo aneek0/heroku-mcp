@@ -157,6 +157,11 @@ heroku_mcp:
 a URL the userbot can fetch, `load_module` cannot work — the other tools
 (commands, evaluate, restart, history) are unaffected.
 
+The userbot's `.dlm` handler validates the URL (`validate_url` in Heroku): it
+downloads **only HTTPS URLs without embedded credentials**. A plain-HTTP or
+loopback URL is rejected before any download, so `load_module` fails fast with
+that reason instead of sending a command that cannot succeed.
+
 The module store serves raw sources with **no authentication**: anyone who can
 reach it can read your module code. It binds `server_port + 1` and follows
 `server_host` unless `module_host` is set. Ways to keep it closed:

@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `load_module`/`unload_module` and the module store reject names containing
   `/` or `..`, so a module name cannot write or read outside `modules/`.
 - `.help` parsing accepts the 2026-10 listing format (`🛑 Module: ( cmd | … )`).
+- `load_module` returned the intermediate "🕔 Устанавливаю модуль…" stage: the
+  2 s quiet window closed before the real result. It now settles on 8 s, so the
+  load result or the userbot's error is what comes back.
+- `load_module` fails fast when the derived URL is not HTTPS: the userbot's
+  `.dlm` only downloads HTTPS URLs without credentials, so a loopback or
+  plain-HTTP URL could never succeed.
 
 ### Changed
 - `telethon>=1.45`: 1.44 cannot deserialize `ReplyInlineMarkup` / the new
@@ -31,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `docs/adr/0002-rich-answer-parsing.md`.
 - Golden fixtures captured from the live topic (`tests/fixtures/*.json`) and
   module-name guard tests (94 offline tests total).
+- `test_non_https_module_url_fails_fast` (95 offline tests total).
 
 ## [0.1.0] — 2026-09-16
 

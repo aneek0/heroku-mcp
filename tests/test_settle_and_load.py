@@ -151,9 +151,10 @@ class LoadModuleTest(unittest.TestCase):
     def _patched_settings(self, real_settings):
         # pydantic BaseSettings rejects attribute assignment for methods;
         # patch the class method instead and keep the real instance in place.
+        # https: the userbot's .dlm rejects plain-HTTP module URLs.
         return mock.patch.object(
             type(real_settings), "module_url",
-            lambda self, name, port: f"http://store/{name}.py",
+            lambda self, name, port: f"https://store/{name}.py",
         )
 
     def test_reload_existing_file_without_code(self):
@@ -215,6 +216,28 @@ class LoadModuleTest(unittest.TestCase):
             self.assertEqual((tmp_path / "fresh.py").read_text(), "print(1)\n")
             self.assertTrue(sc.call_args.args[0].startswith(".dlm "))
 
+    def test_non_https_module_url_fails_fast(self):
+        # The userbot's .dlm validates the URL and refuses plain HTTP; sending
+        # the command anyway only wastes a round-trip and hides the cause.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            plain_http = mock.patch.object(
+                type(telegram.settings), "module_url",
+                lambda self, name, port: f"http://store/{name}.py",
+            )
+            with (
+                self._settings_tmp(tmp_path),
+                mock.patch("heroku_mcp.server.start_http", mock.AsyncMock()),
+                mock.patch("heroku_mcp.server.get_bound_port", return_value=6768),
+                plain_http,
+                mock.patch("heroku_mcp.server.send_command", mock.AsyncMock()) as sc,
+            ):
+                result = _run(load_module("fresh", code="print(1)\n"))
+        self.assertIn("not HTTPS", result)
+        sc.assert_not_called()
+
 
 class ExecuteTest(unittest.TestCase):
     def test_execute_passes_wait_through(self):
@@ -259,7 +282,7 @@ class ExecuteTest(unittest.TestCase):
                 mock.patch("heroku_mcp.server.get_bound_port", return_value=6768),
                 mock.patch.object(
                     type(telegram.settings), "module_url",
-                    lambda self, name, port: f"http://store/{name}.py",
+                    lambda self, name, port: f"https://store/{name}.py",
                 ),
                 mock.patch("heroku_mcp.server.send_command",
                            mock.AsyncMock(return_value="")),

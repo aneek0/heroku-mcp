@@ -188,10 +188,21 @@ async def load_module(name: str, code: str | None = None) -> str:
 
     port = get_bound_port() or (settings.server_port + 1)
     url = settings.module_url(name, port)
+    if not url.startswith("https://"):
+        # The userbot's .dlm runs validate_url: it downloads only from HTTPS
+        # URLs without embedded credentials. Sending a loopback/plain-HTTP URL
+        # always ends in that error, so fail fast with what to fix.
+        return (
+            f"❌ module URL {url} is not HTTPS — the userbot only downloads "
+            "modules over HTTPS (no credentials in the URL). Set "
+            "`module_base_url` to an HTTPS endpoint the userbot can reach "
+            "(reverse proxy or tunnel in front of this host), then retry."
+        )
     log.info("Serving module %s to the userbot at %s", name, url)
-    # .dlm edits twice ("installing..." then the result); default quiet=2 s
-    # returns the final stage. wait=25 is just the hang ceiling.
-    response = await send_command(f".dlm {url}", wait=25.0)
+    # .dlm edits the command twice: "installing..." right away, then the real
+    # result 2-10 s later (fetch + load, or a validate_url error). quiet=8 keeps
+    # the window open past the intermediate stage; wait=25 is the hang ceiling.
+    response = await send_command(f".dlm {url}", wait=25.0, quiet=8.0)
     return response or "(no response — userbot never reported the module result)"
 
 

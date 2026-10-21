@@ -71,9 +71,16 @@ event handler or poll fallback (`get_messages`).
 - `load_module(name, code=…)` writes `modules/<name>.py` and sends `.dlm`.
   `load_module(name)` without `code` re-sends `.dlm` for the existing file
   (edit the file in place first, then call it to reload).
-- `send_command` tracks edits until `quiet` seconds (default 2) pass without
-  a new one and returns the last text: `.dlm` returns the final load result,
-  not the intermediate "installing…" stage. `wait` is only the hang ceiling.
+- `.dlm` runs the userbot's `validate_url`: only **HTTPS URLs without
+  credentials** are downloaded. `load_module` returns that error immediately
+  for a plain-HTTP/loopback URL instead of sending a doomed command; a working
+  setup needs `module_base_url` pointing at an HTTPS endpoint the userbot can
+  reach (reverse proxy/tunnel), so MCP and userbot on different hosts usually
+  need one.
+- Inside `load_module` the settle window is `quiet=8` s (not the default 2):
+  `.dlm` edits "installing…" first and the real result lands 2-10 s later, so
+  the 2 s default returned the intermediate stage. `wait` is only the hang
+  ceiling.
 - Loading takes ~1-3 s on the userbot side; expect the tool to answer in
   ~3-5 s total. No hash checks: the module store serves exactly what was
   written. External sources (raw GitHub) may serve CDN-cached code for up to
